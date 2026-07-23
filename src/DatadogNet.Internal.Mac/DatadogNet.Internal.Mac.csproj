@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <DatadogFramework>DatadogInternal</DatadogFramework>
+    <DatadogPackageName>Internal</DatadogPackageName>
+    <Description>.NET for Mac Catalyst / .NET MAUI bindings for the native Datadog iOS SDK's DatadogInternal framework: the shared foundation every other Datadog feature module is built on, including the URLSession delegate used for automatic network instrumentation. Built against dd-sdk-ios $(DatadogNativeVersion). You normally get this package transitively rather than referencing it directly.</Description>
+    <PackageTags>datadog-internal;urlsession</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="../Datadog.Binding.props" />
+
+  <!--
+    No dependencies. DatadogInternal is the root of the native graph - every other Datadog
+    framework links it, and it links none of them. The previous bindings had this inverted,
+    declaring DatadogInternal.Mac as depending on DatadogCore.Mac and DatadogTrace.Mac; the actual
+    load commands in the binary say the opposite.
+  -->
+
+</Project>

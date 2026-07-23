@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <DatadogFramework>DatadogTrace</DatadogFramework>
+    <DatadogPackageName>Trace</DatadogPackageName>
+    <Description>.NET for Mac Catalyst / .NET MAUI bindings for the native Datadog iOS SDK's DatadogTrace framework: distributed tracing (APM), spans, and trace-context propagation across Datadog, B3 and W3C tracecontext headers. Built against dd-sdk-ios $(DatadogNativeVersion). The DD* managed API for this module is bound in this package, matching DatadogNet.Trace.iOS.</Description>
+    <PackageTags>datadog-trace;apm;tracing;opentelemetry</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="../Datadog.Binding.props" />
+
+  <!--
+    ProjectReference, not PackageReference: `dotnet pack` turns each one into a NuGet dependency on
+    the referenced package at the same version, so the published graph is identical either way -
+    but a PackageReference at $(Version) cannot restore until that version has been packed, which
+    makes a clean clone unbuildable and forces every local build through the packing script in
+    dependency order.
+
+    DatadogTrace is the only framework that links OpenTelemetryApi, which is why the OpenTelemetry
+    binding is a dependency here rather than arriving transitively.
+    Referencing Trace alone now links; before, it did not.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../DatadogNet.Core.Mac/DatadogNet.Core.Mac.csproj" />
+    <ProjectReference Include="../DatadogNet.Internal.Mac/DatadogNet.Internal.Mac.csproj" />
+    <ProjectReference Include="../DatadogNet.OpenTelemetryApi.Mac/DatadogNet.OpenTelemetryApi.Mac.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,147 @@
+<!--
+  Everything the eleven binding projects have in common.
+
+  Imported explicitly by each .csproj rather than picked up as a Directory.Build.props, because it
+  reads properties the project sets - DatadogFramework and DatadogPackageName - and
+  Directory.Build.props is imported before the project body, so it would see neither. That leaves
+  each binding project as roughly a dozen lines: its identity, its description, and its
+  dependencies.
+
+  This file is the Mac Catalyst counterpart of DatadogNet.iOS's Datadog.Binding.props. The binding
+  definitions themselves (ApiDefinitions.cs and friends) are copied verbatim from that repository
+  by build/SyncBindingsFromiOS.sh: Mac Catalyst is UIKit-based, so the same Objective-C surface
+  compiles for both platforms and only the packaging differs.
+-->
+<Project>
+
+  <PropertyGroup>
+    <!--
+      Each .NET SDK's maccatalyst workload supports the current target framework and the previous
+      one, exactly like the iOS workload: the .NET 9 band builds net8.0-maccatalyst +
+      net9.0-maccatalyst, the .NET 10 band builds net10.0-maccatalyst. No single SDK can build all
+      three, so BuildNugets.sh packs twice and merges the results - see build/merge-packages.py.
+      DatadogSdkBand selects which pass this build is.
+
+      The platform version is pinned rather than left to the workload's default, for the same
+      reason DatadogNet.iOS pins its - it ends up in the lib/<tfm>/ folder name inside the
+      package, and an unpinned value silently follows workload updates. The versions mirror the
+      iOS repository's (Catalyst platform versions track iOS versions since net6.0).
+    -->
+    <DatadogSdkBand Condition=" '$(DatadogSdkBand)' == '' ">net9</DatadogSdkBand>
+    <TargetFrameworks Condition=" '$(DatadogSdkBand)' == 'net9' ">net8.0-maccatalyst18.0;net9.0-maccatalyst18.0</TargetFrameworks>
+    <TargetFrameworks Condition=" '$(DatadogSdkBand)' == 'net10' ">net10.0-maccatalyst26.0</TargetFrameworks>
+    <!--
+      net8.0-maccatalyst is past end of support, which the SDK reports as an error. It ships
+      deliberately, for the same reason as in DatadogNet.iOS: a large share of MAUI apps are still
+      on .NET 8, and the DatadogNet façade's Mac Catalyst head targets the same three versions.
+    -->
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <CheckEolWorkloads>false</CheckEolWorkloads>
+
+    <!--
+      The built frameworks record 13.1 as their minimum - the Catalyst floor, since dd-sdk-ios's
+      iOS 12.2 deployment target predates Catalyst and xcodebuild clamps it. The packages claim
+      15.0 anyway, for two reasons that point the same way: the .NET 9 maccatalyst workload
+      refuses an app below 15.0 outright, and Datadog's own support statement for Catalyst is
+      macOS 12+ - which is exactly the macOS line Catalyst 15 shipped in.
+    -->
+    <SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
+
+    <IsBindingProject>true</IsBindingProject>
+    <!--
+      Ship the native payload as a single <Assembly>.resources.zip rather than a
+      <Assembly>.resources directory. On Catalyst this is not just the path-length insurance it is
+      on iOS: Catalyst frameworks are macOS-style versioned bundles (Versions/A + symlinks), and
+      symlinks only survive packaging in the compressed form.
+    -->
+    <CompressBindingResourcePackage>true</CompressBindingResourcePackage>
+
+    <!--
+      The namespace is the bare framework name - DatadogCore, DatadogRUM, DatadogLogs - matching
+      DatadogNet.iOS exactly. That is what lets shared source (the DatadogNet façade's
+      Platforms/iOS implementation, or an app's own #if IOS code) compile unchanged for a Mac
+      Catalyst head: same types, same namespaces, different package id.
+    -->
+    <RootNamespace>$(DatadogFramework)</RootNamespace>
+    <AssemblyName>DatadogNet.$(DatadogPackageName).Mac</AssemblyName>
+
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>true</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!--
+      CS1591: the generated binding has no XML doc comments.
+      CS0108/CS0109: Swift protocol conformances reach C# as a protocol interface plus a class that
+      redeclares the same members - a property of how Objective Sharpie projects Swift, inherited
+      here with the binding definitions themselves.
+    -->
+    <NoWarn>$(NoWarn);CS1591;CS0108;CS0109</NoWarn>
+  </PropertyGroup>
+
+  <!-- Packaging -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>DatadogNet.$(DatadogPackageName).Mac</PackageId>
+    <Title>.NET for Mac Catalyst bindings for the native $(DatadogFramework) framework.</Title>
+    <PackageTags>$(PackageTags);datadog;observability;SDK;MAUI;maccatalyst;dotnet-maccatalyst;Binding</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)../build/icon.png" Pack="true" PackagePath="/" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath="/" Visible="false" />
+    <!--
+      Both licence texts the package is covered by: MIT for the binding code in this repository,
+      Apache-2.0 for the native binaries built from Datadog's sources. Packed into a folder so
+      each file keeps its own name.
+    -->
+    <None Include="$(MSBuildThisFileDirectory)../LICENSE" Pack="true" PackagePath="licenses/" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)../licenses/Apache-2.0.txt" Pack="true" PackagePath="licenses/" Visible="false" />
+  </ItemGroup>
+
+  <!--
+    The xcframeworks live in one directory at the repository root rather than one copy per project,
+    for the same reasons as in DatadogNet.iOS - except here they are produced by
+    build/BuildXcFrameworks.sh rather than downloaded, and each contains a single
+    ios-arm64_x86_64-maccatalyst slice.
+  -->
+  <PropertyGroup>
+    <DatadogXcFramework>$(MSBuildThisFileDirectory)../libs/$(DatadogFramework).xcframework</DatadogXcFramework>
+  </PropertyGroup>
+
+  <Target Name="ValidateDatadogXcFramework" BeforeTargets="Build;Pack"
+          Condition="!Exists('$(DatadogXcFramework)')">
+    <Error Text="$(DatadogFramework).xcframework is missing. Run ./build/BuildXcFrameworks.sh first." />
+  </Target>
+
+  <Target Name="ValidateDatadogSdkBand" BeforeTargets="Build;Pack" Condition=" '$(TargetFrameworks)' == '' ">
+    <Error Text="DatadogSdkBand must be 'net9' or 'net10', but was '$(DatadogSdkBand)'." />
+  </Target>
+
+  <ItemGroup>
+    <!--
+      ForceLoad and SmartLink=False are carried over from DatadogNet.iOS, where they have shipped
+      this way for the whole 2.x and 3.x lines. All eleven Catalyst frameworks are dynamic, so
+      ForceLoad matters less here than it did for the old static CrashReporter archive - but
+      diverging from the iOS packages' linking behaviour would make "works on iOS, fails on
+      Catalyst" bugs out of nothing.
+    -->
+    <NativeReference Include="$(DatadogXcFramework)">
+      <Kind>Framework</Kind>
+      <ForceLoad>True</ForceLoad>
+      <SmartLink>False</SmartLink>
+    </NativeReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      DatadogFlags and DatadogProfiling have a comment-only ApiDefinitions.cs, inherited from
+      DatadogNet.iOS: upstream exposes no Objective-C surface for those modules yet, so the
+      packages exist to ship the native binary and its symbols. The file is still required - a
+      binding project with no ObjcBindingApiDefinition does not build.
+    -->
+    <ObjcBindingApiDefinition Include="ApiDefinitions.cs" />
+    <ObjcBindingCoreSource Include="StructsAndEnums.cs" Condition="Exists('$(MSBuildProjectDirectory)/StructsAndEnums.cs')" />
+  </ItemGroup>
+
+</Project>

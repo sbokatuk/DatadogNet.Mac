@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <DatadogFramework>DatadogCore</DatadogFramework>
+    <DatadogPackageName>Core</DatadogPackageName>
+    <Description>.NET for Mac Catalyst / .NET MAUI bindings for the native Datadog iOS SDK's DatadogCore framework: SDK initialization, tracking consent, user and account info, and the app-launch and exception handlers every feature module reports through. Built against dd-sdk-ios $(DatadogNativeVersion). Enable a feature by also referencing DatadogNet.RUM.Mac, DatadogNet.Logs.Mac or DatadogNet.Trace.Mac - each feature package binds its own DD* types.</Description>
+    <PackageTags>datadog-core</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="../Datadog.Binding.props" />
+
+  <!--
+    ProjectReference, not PackageReference: `dotnet pack` turns each one into a NuGet dependency on
+    the referenced package at the same version, so the published graph is identical either way -
+    but a PackageReference at $(Version) cannot restore until that version has been packed, which
+    makes a clean clone unbuildable and forces every local build through the packing script in
+    dependency order.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../DatadogNet.Internal.Mac/DatadogNet.Internal.Mac.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <DatadogFramework>DatadogProfiling</DatadogFramework>
+    <DatadogPackageName>Profiling</DatadogPackageName>
+    <Description>.NET for Mac Catalyst / .NET MAUI bindings for the native Datadog iOS SDK's DatadogProfiling framework: continuous profiling of the app's threads. Built against dd-sdk-ios $(DatadogNativeVersion). NOTE: upstream exposes no Objective-C API for this module yet, so it ships the native framework but no callable C# surface - see the package README.</Description>
+    <PackageTags>datadog-profiling;profiler</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="../Datadog.Binding.props" />
+
+  <ItemGroup>
+    <ProjectReference Include="../DatadogNet.Core.Mac/DatadogNet.Core.Mac.csproj" />
+    <ProjectReference Include="../DatadogNet.Internal.Mac/DatadogNet.Internal.Mac.csproj" />
+  </ItemGroup>
+
+</Project>

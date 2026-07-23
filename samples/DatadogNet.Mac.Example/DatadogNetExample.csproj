@@ -1,0 +1,70 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<!--
+		  Both target frameworks the .NET 9 SDK band can build, so the sample proves the packages
+		  resolve on each. net10.0-maccatalyst26.0 is deliberately left out: it needs the .NET 10
+		  band, which would mean a second SDK and MAUI workload install to compile a sample that
+		  exercises exactly the same API.
+
+		  The platform version is pinned to match the packages' lib/ folders. A bare
+		  net9.0-maccatalyst resolves to the newest reference pack, which constrains the Xcode
+		  version for no benefit in a sample. A consuming app targeting a later platform version
+		  still resolves these assets, since 18.0 is compatible with them.
+		-->
+		<TargetFrameworks>net8.0-maccatalyst18.0;net9.0-maccatalyst18.0</TargetFrameworks>
+
+		<OutputType>Exe</OutputType>
+		<RootNamespace>DatadogNetExample</RootNamespace>
+		<UseMaui>true</UseMaui>
+		<SingleProject>true</SingleProject>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<CheckEolTargetFramework>false</CheckEolTargetFramework>
+		<CheckEolWorkloads>false</CheckEolWorkloads>
+
+		<ApplicationTitle>DatadogNet Mac Example</ApplicationTitle>
+		<ApplicationId>com.sbokatuk.datadognet.mac.example</ApplicationId>
+		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+		<ApplicationVersion>1</ApplicationVersion>
+
+		<!--
+		  15.0 (macOS 12) matches the packages and the .NET 9 maccatalyst workload's own floor -
+		  see the note in src/Datadog.Binding.props.
+		-->
+		<SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<MauiFont Include="Resources\Fonts\*" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.1" />
+	</ItemGroup>
+
+	<!--
+	  Resolved from ./artifacts through the local feed in the repository's NuGet.config, not from
+	  nuget.org, so the sample always exercises your local build. Run ./build/BuildNugets.sh first.
+	  Pass -p:DatadogPackageVersion=3.14.0.1-rc.1 to point it at a specific build.
+	-->
+	<PropertyGroup>
+		<DatadogPackageVersion Condition=" '$(DatadogPackageVersion)' == '' ">$(VersionPrefix)</DatadogPackageVersion>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="DatadogNet.Core.Mac" Version="$(DatadogPackageVersion)" />
+		<PackageReference Include="DatadogNet.RUM.Mac" Version="$(DatadogPackageVersion)" />
+		<PackageReference Include="DatadogNet.Logs.Mac" Version="$(DatadogPackageVersion)" />
+		<PackageReference Include="DatadogNet.Trace.Mac" Version="$(DatadogPackageVersion)" />
+		<PackageReference Include="DatadogNet.CrashReporting.Mac" Version="$(DatadogPackageVersion)" />
+	</ItemGroup>
+
+	<!--
+	  No DatadogNet.SessionReplay.Mac reference, although the package exists: Datadog supports
+	  Session Replay on iOS and iPadOS only, so on Catalyst the module would initialize and then
+	  record nothing. The iOS sample enables it; this one demonstrates the honest Catalyst set.
+	-->
+
+</Project>

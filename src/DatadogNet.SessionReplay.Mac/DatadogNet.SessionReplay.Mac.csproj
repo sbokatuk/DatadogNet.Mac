@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <DatadogFramework>DatadogSessionReplay</DatadogFramework>
+    <DatadogPackageName>SessionReplay</DatadogPackageName>
+    <Description>.NET for Mac Catalyst / .NET MAUI bindings for the native Datadog iOS SDK's DatadogSessionReplay framework: records and replays user sessions, with privacy levels that mask text and user input. Built against dd-sdk-ios $(DatadogNativeVersion). Requires RUM to be enabled.</Description>
+    <PackageTags>datadog-session-replay;session-replay</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="../Datadog.Binding.props" />
+
+  <!--
+    ProjectReference, not PackageReference: `dotnet pack` turns each one into a NuGet dependency on
+    the referenced package at the same version, so the published graph is identical either way -
+    but a PackageReference at $(Version) cannot restore until that version has been packed, which
+    makes a clean clone unbuildable and forces every local build through the packing script in
+    dependency order.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../DatadogNet.Core.Mac/DatadogNet.Core.Mac.csproj" />
+    <ProjectReference Include="../DatadogNet.Internal.Mac/DatadogNet.Internal.Mac.csproj" />
+  </ItemGroup>
+
+</Project>

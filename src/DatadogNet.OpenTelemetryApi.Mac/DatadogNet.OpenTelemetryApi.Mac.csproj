@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <DatadogFramework>OpenTelemetryApi</DatadogFramework>
+    <DatadogPackageName>OpenTelemetryApi</DatadogPackageName>
+    <Description>.NET for Mac Catalyst / .NET MAUI bindings for the OpenTelemetryApi framework - the OpenTelemetry Swift API types the Datadog iOS SDK uses for trace-context propagation, as shipped inside the Datadog iOS SDK $(DatadogNativeVersion) release. Pulled in automatically by DatadogNet.Trace.Mac.</Description>
+    <PackageTags>opentelemetry;tracing</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="../Datadog.Binding.props" />
+
+  <!-- No dependencies: this is the OpenTelemetry API surface, which depends on nothing Datadog. -->
+
+</Project>

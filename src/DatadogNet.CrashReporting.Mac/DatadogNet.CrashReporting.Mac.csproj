@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <DatadogFramework>DatadogCrashReporting</DatadogFramework>
+    <DatadogPackageName>CrashReporting</DatadogPackageName>
+    <Description>.NET for Mac Catalyst / .NET MAUI bindings for the native Datadog iOS SDK's DatadogCrashReporting framework: captures native crashes and reports them as RUM errors on the next launch. From dd-sdk-ios 3.0 the crash engine is KSCrash, linked into this framework, so there is no separate CrashReporter package any more. Built against dd-sdk-ios $(DatadogNativeVersion). Enable it after initializing the SDK; upload your app's dSYMs to Datadog for symbolication.</Description>
+    <PackageTags>datadog-crash-reporting;crash-reporting</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="../Datadog.Binding.props" />
+
+  <!--
+    ProjectReference, not PackageReference: `dotnet pack` turns each one into a NuGet dependency on
+    the referenced package at the same version, so the published graph is identical either way -
+    but a PackageReference at $(Version) cannot restore until that version has been packed, which
+    makes a clean clone unbuildable and forces every local build through the packing script in
+    dependency order.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../DatadogNet.Core.Mac/DatadogNet.Core.Mac.csproj" />
+    <ProjectReference Include="../DatadogNet.Internal.Mac/DatadogNet.Internal.Mac.csproj" />
+  </ItemGroup>
+
+</Project>

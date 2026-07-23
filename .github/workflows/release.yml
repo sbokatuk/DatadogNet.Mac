@@ -1,0 +1,190 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: resolve release version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      native-version: ${{ steps.resolve.outputs.native-version }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: resolve
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! printf '%s' "${version}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::tag '${GITHUB_REF_NAME}' does not look like a version (expected e.g. v3.14.0.1)"
+            exit 1
+          fi
+
+          # The tag drives which native SDK is bound, so a different line is released simply by
+          # tagging it - v3.15.0.1 builds against dd-sdk-ios 3.15.0. Any prerelease suffix is
+          # dropped, and the fourth component is this repository's binding revision, not part of
+          # the Datadog version: v3.14.0.6 still binds dd-sdk-ios 3.14.0.
+          native=$(printf '%s' "${version%%-*}" | cut -d. -f1-3)
+          echo "native-version=${native}" >> "$GITHUB_OUTPUT"
+
+          case "${version}" in
+            *-*) prerelease=true ;;
+            *)   prerelease=false ;;
+          esac
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
+          echo "Releasing ${version} (prerelease=${prerelease})" >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: build
+    needs: version
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      native-version: ${{ needs.version.outputs.native-version }}
+
+  publish:
+    name: publish to nuget.org and create release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    # Must match the Environment on the nuget.org trusted publishing policy for this workflow.
+    environment: nuget.org
+    permissions:
+      # contents: write creates the GitHub release; id-token: write lets the job request the OIDC
+      # token that nuget.org exchanges for a short-lived API key. Without the latter the token
+      # request fails silently and the login step gets no key.
+      contents: write
+      id-token: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Needed to find the previous tag when generating the changelog.
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: artifacts
+
+      # nuget.org is published to first: a GitHub release that links to packages which failed to
+      # upload would be worse than a release created a moment late.
+      # Deliberately immediately before the push: the issued key is valid for one hour, and each
+      # OIDC token can be exchanged exactly once.
+      - name: Authenticate to nuget.org
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push to nuget.org
+        run: |
+          dotnet nuget push "artifacts/*.nupkg" \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
+            --skip-duplicate
+
+      - name: Compose release notes
+        run: |
+          # Resolved from the tag, not Directory.Build.props, so a release of a different line
+          # reports the version it actually bound rather than whatever the branch defaults to.
+          native="${{ needs.version.outputs.native-version }}"
+          previous=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+
+          # A curated docs/release-notes/<version>.md replaces the generated commit list when one
+          # exists. The second lookup drops the prerelease suffix, so v2.17.0.1-beta.2 reuses the
+          # notes written for 2.17.0.1 rather than silently falling back to raw commit subjects.
+          notes="docs/release-notes/${VERSION}.md"
+          [ -f "${notes}" ] || notes="docs/release-notes/${VERSION%%-*}.md"
+
+          {
+            if [ -f "${notes}" ]; then
+              echo "==> using curated notes from ${notes}" >&2
+              cat "${notes}"
+            else
+              echo "## What's changed"
+              echo
+              if [ -n "${previous}" ]; then
+                git log --no-merges --pretty='- %s (%h)' "${previous}..${GITHUB_REF_NAME}"
+              else
+                # No previous tag: listing every commit would reach back to the repository's first
+                # commit, which is noise rather than a changelog.
+                echo "Initial release."
+              fi
+            fi
+            echo
+            if [ -n "${previous}" ]; then
+              echo "**Full changelog**: ${{ github.server_url }}/${{ github.repository }}/compare/${previous}...${GITHUB_REF_NAME}"
+              echo
+            fi
+
+            echo "## Packages"
+            echo
+            echo "Bound against [dd-sdk-ios \`${native}\`](https://github.com/DataDog/dd-sdk-ios/releases/tag/${native}), built from source for Mac Catalyst, targeting \`net8.0-maccatalyst18.0\`, \`net9.0-maccatalyst18.0\` and \`net10.0-maccatalyst26.0\`."
+            echo
+            echo "> The first three components of \`${VERSION}\` are the dd-sdk-ios version; the fourth is this"
+            echo "> repository's binding revision, which advances when the bindings or packaging change while"
+            echo "> the native binaries stay put."
+            echo
+            echo "| Package | Wraps | NuGet |"
+            echo "| --- | --- | --- |"
+            # Package id, then the native framework it ships. Kept in the same order as the README.
+            while IFS=: read -r package framework; do
+              [ -n "${package}" ] || continue
+              id="DatadogNet.${package}.Mac"
+              echo "| \`${id}\` | \`${framework}\` | [${VERSION}](https://www.nuget.org/packages/${id}/${VERSION}) |"
+            done <<'PACKAGES'
+          Core:DatadogCore
+          RUM:DatadogRUM
+          Logs:DatadogLogs
+          Trace:DatadogTrace
+          SessionReplay:DatadogSessionReplay
+          WebViewTracking:DatadogWebViewTracking
+          CrashReporting:DatadogCrashReporting
+          Flags:DatadogFlags
+          Profiling:DatadogProfiling
+          Internal:DatadogInternal
+          OpenTelemetryApi:OpenTelemetryApi
+          PACKAGES
+            echo
+            echo "\`\`\`"
+            echo "dotnet add package DatadogNet.Core.Mac --version ${VERSION}"
+            echo "dotnet add package DatadogNet.RUM.Mac --version ${VERSION}"
+            echo "\`\`\`"
+            echo
+            echo "## Licensing"
+            echo
+            echo "The binding code is MIT; the bundled native binaries are Apache-2.0, built from Datadog's sources, and"
+            echo "each package ships both texts under \`licenses/\`."
+          } > release-notes.md
+
+          cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The packages themselves are not attached: nuget.org is the distribution channel, and
+          # the notes link to every published package instead.
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${VERSION}" \
+            --notes-file release-notes.md \
+            ${{ needs.version.outputs.prerelease == 'true' && '--prerelease' || '' }}

@@ -1,0 +1,56 @@
+<Project>
+
+  <PropertyGroup>
+    <!--
+      Package versions are <dd-sdk-ios version>.<binding revision>, e.g. 3.14.0.1 - the same
+      scheme DatadogNet.iOS uses, deliberately, because both repositories bind the same native
+      SDK: Mac Catalyst is a variant of the iOS platform, and dd-sdk-ios is the SDK that runs
+      there. A given DatadogNet.<Module>.MacCatalyst version therefore wraps exactly the same
+      native release as the DatadogNet.<Module>.iOS package of the same version.
+
+      The fourth component belongs to this repository and increments whenever the bindings or
+      packaging change while the native version stays put. It is NOT kept in lock-step with the
+      iOS repository's revision: the two advance independently.
+
+      Unlike DatadogNet.iOS, the native binaries here are not downloaded from upstream's release
+      page - Datadog publishes no Mac Catalyst slices. They are built from the dd-sdk-ios source
+      at the git tag $(DatadogNativeVersion) by build/BuildXcFrameworks.sh, which is why that
+      script needs Xcode rather than just curl.
+    -->
+    <DatadogNativeVersion>3.14.0</DatadogNativeVersion>
+    <DatadogBindingRevision>1</DatadogBindingRevision>
+    <VersionPrefix>$(DatadogNativeVersion).$(DatadogBindingRevision)</VersionPrefix>
+
+    <!--
+      The OpenTelemetryApi framework version dd-sdk-ios $(DatadogNativeVersion) pins in its
+      Cartfile.resolved. BuildXcFrameworks.sh builds this tag of
+      DataDog/opentelemetry-swift-packages for Mac Catalyst, because the binary Datadog publishes
+      for it carries iOS, tvOS, watchOS, visionOS and macOS slices - everything except Catalyst.
+      Bump it together with DatadogNativeVersion by reading the new Cartfile.resolved.
+    -->
+    <DatadogOtelVersion>2.5.0</DatadogOtelVersion>
+
+    <Authors>s.bokatuk</Authors>
+    <Company>s.bokatuk</Company>
+    <Copyright>Copyright © s.bokatuk</Copyright>
+    <PackageProjectUrl>https://github.com/sbokatuk/DatadogNet.Mac</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/sbokatuk/DatadogNet.Mac</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <!--
+      One expression for every package: the binding source here is MIT, and every native binary
+      built by BuildXcFrameworks.sh is Apache-2.0 - dd-sdk-ios, KSCrash and opentelemetry-swift
+      are all Apache-2.0.
+    -->
+    <PackageLicenseExpression>MIT AND Apache-2.0</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition=" '$(GITHUB_ACTIONS)' == 'true' ">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+</Project>

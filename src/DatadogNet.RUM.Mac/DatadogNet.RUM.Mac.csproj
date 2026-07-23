@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <DatadogFramework>DatadogRUM</DatadogFramework>
+    <DatadogPackageName>RUM</DatadogPackageName>
+    <Description>.NET for Mac Catalyst / .NET MAUI bindings for the native Datadog iOS SDK's DatadogRUM framework: Real User Monitoring - views, actions, resources, errors, frustration signals and mobile vitals, with automatic UIKit instrumentation. Built against dd-sdk-ios $(DatadogNativeVersion). The DD* managed API for this module is bound in this package, matching DatadogNet.RUM.iOS.</Description>
+    <PackageTags>datadog-rum;rum;real-user-monitoring</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="../Datadog.Binding.props" />
+
+  <!--
+    ProjectReference, not PackageReference: `dotnet pack` turns each one into a NuGet dependency on
+    the referenced package at the same version, so the published graph is identical either way -
+    but a PackageReference at $(Version) cannot restore until that version has been packed, which
+    makes a clean clone unbuildable and forces every local build through the packing script in
+    dependency order.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../DatadogNet.Core.Mac/DatadogNet.Core.Mac.csproj" />
+    <ProjectReference Include="../DatadogNet.Internal.Mac/DatadogNet.Internal.Mac.csproj" />
+  </ItemGroup>
+
+</Project>

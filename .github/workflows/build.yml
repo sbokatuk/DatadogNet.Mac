@@ -1,0 +1,166 @@
+name: build
+
+# Reusable pipeline: builds the native Catalyst xcframeworks from source, packs all eleven Datadog
+# Mac Catalyst binding packages at a given version, validates the packed packages, builds the
+# sample against them, and uploads the packages as an artifact. Callers (pr.yml, release.yml)
+# decide the version and what to do with the result.
+#
+# Two structural differences from DatadogNet.iOS's pipeline:
+#
+#   * The xcframeworks are compiled here (BuildXcFrameworks.sh), not downloaded - Datadog
+#     publishes no Mac Catalyst binaries. The ~15 minute build is cached on the native versions
+#     and the build script's own hash.
+#
+#   * There is no simulator smoke-test job. Catalyst apps run directly on macOS, and launching a
+#     GUI app on a headless runner is flakier than the coverage is worth; building the sample
+#     against the packed packages is the end-to-end check.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: NuGet version to stamp on every package.
+        required: true
+        type: string
+      native-version:
+        description: >
+          dd-sdk-ios version to build and bind against. Defaults to DatadogNativeVersion in
+          Directory.Build.props; set it to build a package for a different line, e.g. 3.15.0.
+        required: false
+        default: ''
+        type: string
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+jobs:
+  pack:
+    name: build and pack
+    timeout-minutes: 90
+    # Catalyst builds require a macOS runner with Xcode; there is no cross-platform path for the
+    # native toolchain.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: ./.github/actions/select-xcode
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # 9.0.x packs net8+net9 (global.json pins it) and 10.0.x packs net10.
+          dotnet-version: |
+            9.0.x
+            10.0.x
+
+      - name: Install Mac Catalyst workloads for every SDK band
+        run: |
+          # Each band supplies different reference packs: net8.0-maccatalyst18.0 and
+          # net9.0-maccatalyst18.0 come from the .NET 9 band, net10.0-maccatalyst26.0 from the
+          # .NET 10 band. The SDK is chosen by the global.json in the working directory, so each
+          # band is installed from a scratch directory pinned to that SDK.
+          for major in 9 10; do
+            dir="${RUNNER_TEMP}/sdk${major}"
+            mkdir -p "${dir}"
+            sdk=$(dotnet --list-sdks | grep "^${major}\." | tail -1 | cut -d' ' -f1)
+            echo "installing maccatalyst workload for SDK ${sdk}"
+            ( cd "${dir}" \
+              && dotnet new globaljson --sdk-version "${sdk}" --force \
+              && dotnet workload install maccatalyst )
+          done
+
+      - name: Resolve native version
+        id: native
+        run: |
+          version="${{ inputs.native-version }}"
+          if [ -z "${version}" ]; then
+            version=$(sed -n 's:.*<DatadogNativeVersion>\(.*\)</DatadogNativeVersion>.*:\1:p' Directory.Build.props | head -1)
+          fi
+          otel=$(sed -n 's:.*<DatadogOtelVersion>\(.*\)</DatadogOtelVersion>.*:\1:p' Directory.Build.props | head -1)
+          if [ -z "${version}" ] || [ -z "${otel}" ]; then
+            echo "::error::could not determine the dd-sdk-ios / OpenTelemetryApi native versions"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "otel=${otel}" >> "$GITHUB_OUTPUT"
+          echo "Building and binding dd-sdk-ios ${version} (OpenTelemetryApi ${otel}) for Mac Catalyst" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cache Catalyst xcframeworks
+        id: xcframeworks
+        uses: actions/cache@v4
+        with:
+          path: libs
+          # The native versions are part of the key: without them a build for a different line
+          # would restore the previous line's frameworks and bind the wrong thing. The script hash
+          # is too, so a change to how the frameworks are built invalidates the cache. Unlike a
+          # download, the compiled output also varies with Xcode, which select-xcode pins.
+          key: datadog-catalyst-xcframeworks-${{ steps.native.outputs.version }}-${{ steps.native.outputs.otel }}-${{ hashFiles('build/BuildXcFrameworks.sh') }}
+
+      - name: Build Catalyst xcframeworks from source
+        if: steps.xcframeworks.outputs.cache-hit != 'true'
+        run: ./build/BuildXcFrameworks.sh "${{ steps.native.outputs.version }}"
+
+      - name: Pack all packages
+        run: ./build/BuildNugets.sh "${{ inputs.version }}" "${{ steps.native.outputs.version }}"
+
+      - name: Validate packages
+        run: dotnet test tests/DatadogNet.Mac.PackageTests --logger 'trx;LogFileName=package-tests.trx'
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: |
+            artifacts/*.nupkg
+            artifacts/*.snupkg
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-test-results
+          path: '**/*.trx'
+          if-no-files-found: ignore
+          retention-days: 7
+
+  sample:
+    name: build sample app
+    timeout-minutes: 30
+    needs: pack
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: ./.github/actions/select-xcode
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Install MAUI workload
+        run: dotnet workload install maui-maccatalyst
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: artifacts
+
+      # The sample consumes the packed packages exactly as a user would, so it is the only thing
+      # that checks the API is still usable the way the README documents - including the
+      # convenience layer, which the generated binding knows nothing about.
+      #
+      # Debug, and unsigned, because this is a compile-and-link check and nothing here ships.
+      - name: Build the sample against the packed packages
+        run: |
+          dotnet build samples/DatadogNet.Mac.Example/DatadogNetExample.csproj \
+            --configuration Debug \
+            -p:RuntimeIdentifier=maccatalyst-arm64 \
+            -p:DatadogPackageVersion="${{ inputs.version }}"
