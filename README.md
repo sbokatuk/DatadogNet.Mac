@@ -74,8 +74,8 @@ bindings:
 
 ```xml
 <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
-  <PackageReference Include="DatadogNet.Core.Mac" Version="3.14.0.1" />
-  <PackageReference Include="DatadogNet.RUM.Mac" Version="3.14.0.1" />
+  <PackageReference Include="DatadogNet.Core.Mac" Version="3.14.0.2" />
+  <PackageReference Include="DatadogNet.RUM.Mac" Version="3.14.0.2" />
 </ItemGroup>
 ```
 
