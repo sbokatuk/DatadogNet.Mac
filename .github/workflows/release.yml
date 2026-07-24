@@ -85,6 +85,12 @@ jobs:
           name: nuget-packages
           path: artifacts
 
+      - name: Download dSYMs
+        uses: actions/download-artifact@v4
+        with:
+          name: dsyms
+          path: dsyms
+
       # nuget.org is published to first: a GitHub release that links to packages which failed to
       # upload would be worse than a release created a moment late.
       # Deliberately immediately before the push: the issued key is valid for one hour, and each
@@ -140,6 +146,10 @@ jobs:
             echo
             echo "Bound against [dd-sdk-ios \`${native}\`](https://github.com/DataDog/dd-sdk-ios/releases/tag/${native}), built from source for Mac Catalyst, targeting \`net8.0-maccatalyst18.0\`, \`net9.0-maccatalyst18.0\` and \`net10.0-maccatalyst26.0\`."
             echo
+            echo "\`dsyms-${VERSION}.zip\` below carries the dSYMs for these exact binaries - Datadog publishes"
+            echo "no Catalyst builds, so this release is the only place they exist. Upload them to Datadog for"
+            echo "crash symbolication."
+            echo
             echo "> The first three components of \`${VERSION}\` are the dd-sdk-ios version; the fourth is this"
             echo "> repository's binding revision, which advances when the bindings or packaging change while"
             echo "> the native binaries stay put."
@@ -178,13 +188,18 @@ jobs:
 
           cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Package dSYMs for the release
+        run: (cd dsyms && zip -qry "../dsyms-${VERSION}.zip" .)
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           # The packages themselves are not attached: nuget.org is the distribution channel, and
-          # the notes link to every published package instead.
+          # the notes link to every published package instead. The dSYMs are attached, because
+          # this release is the only place symbolication data for these binaries exists.
           gh release create "${GITHUB_REF_NAME}" \
+            "dsyms-${VERSION}.zip" \
             --title "${VERSION}" \
             --notes-file release-notes.md \
             ${{ needs.version.outputs.prerelease == 'true' && '--prerelease' || '' }}

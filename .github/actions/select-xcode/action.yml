@@ -16,8 +16,11 @@ runs:
       run: |
         set -uo pipefail
 
-        # The packages advertise net10.0-ios26.0, and .NET for iOS only builds that target
-        # framework against an Xcode carrying the matching iOS SDK:
+        # A copy of DatadogNet.iOS's select-xcode action - keep the two in sync. It selects by
+        # the *iOS* SDK line deliberately even here: Mac Catalyst builds against the iOS SDK, so
+        # the packages' net10.0-maccatalyst26.0 has exactly the same Xcode requirement as the iOS
+        # repository's net10.0-ios26.0, and .NET only builds either against an Xcode carrying the
+        # matching SDK:
         #
         #     error : This version of .NET for iOS (26.0.11017) requires Xcode 26.0.
         #             The current version of Xcode is 26.5.

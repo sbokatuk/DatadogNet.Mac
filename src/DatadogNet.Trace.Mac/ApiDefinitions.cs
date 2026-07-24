@@ -134,6 +134,7 @@ namespace DatadogTrace
 	}
 
 	// @interface DDB3HTTPHeadersWriter
+	/// <summary>Writes B3-format distributed-tracing headers.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDB3HTTPHeadersWriter
@@ -146,6 +147,7 @@ namespace DatadogTrace
 	}
 
 	// @interface DDHTTPHeadersWriter
+	/// <summary>Writes Datadog-format distributed-tracing headers, for continuing a trace into your backend by hand.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDHTTPHeadersWriter
@@ -158,6 +160,7 @@ namespace DatadogTrace
 	}
 
 	// @interface DDTrace
+	/// <summary>Enables APM distributed tracing. <c>EnableWith(DDTraceConfiguration)</c> once, after core initialisation.</summary>
 	[BaseType (typeof(NSObject))]
 	interface DDTrace
 	{
@@ -171,6 +174,7 @@ namespace DatadogTrace
 	}
 
 	// @interface DDTraceConfiguration
+	/// <summary>Trace options: sampling, network info, RUM bundling and URLSession first-party tracing.</summary>
 	[BaseType (typeof(NSObject))]
 	interface DDTraceConfiguration
 	{
@@ -230,6 +234,7 @@ namespace DatadogTrace
 	}
 
 	// @interface DDTracer
+	/// <summary>The OpenTracing-style tracer: build spans, inject and extract trace headers. The Additions layer adds <c>SetError(Exception)</c>, one-call header injection and trace/span-id reading.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDTracer
@@ -268,6 +273,7 @@ namespace DatadogTrace
 	}
 
 	// @interface DDW3CHTTPHeadersWriter
+	/// <summary>Writes W3C <c>tracecontext</c> distributed-tracing headers.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDW3CHTTPHeadersWriter

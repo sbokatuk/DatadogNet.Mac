@@ -57,6 +57,11 @@ Every package targets `net8.0-maccatalyst18.0`, `net9.0-maccatalyst18.0` and
 `net10.0-maccatalyst26.0`, with `SupportedOSPlatformVersion` 15.0 (macOS 12) - the floor both the
 .NET 9 maccatalyst workload and Datadog's own Catalyst support statement impose.
 
+> **net8 sunset.** The net8 head is already past its platform support window — the net8 mobile
+> workloads left support with MAUI 8 on 14 May 2025 — and ships for the apps that still target
+> it. So the decision does not persist by inertia: **the net8 head is dropped in the first
+> release after .NET 8 itself leaves support on 10 November 2026**, in step with DatadogNet.iOS.
+
 ## Installing
 
 ```sh
@@ -117,7 +122,11 @@ make that possible; the script documents both.
 The binding definitions (`ApiDefinitions.cs`, `StructsAndEnums.cs`, `Additions/`) are **verbatim
 copies from DatadogNet.iOS**, refreshed by
 [build/SyncBindingsFromiOS.sh](build/SyncBindingsFromiOS.sh). Do not edit them here: fix them in
-the iOS repository and re-sync, so the two platforms cannot drift.
+the iOS repository and re-sync, so the two platforms cannot drift. That is enforced, not asked
+politely: the sync records the iOS commit it copied from in `build/ios-bindings-source.txt`, and
+CI's `binding-drift` job re-runs the sync against exactly that commit and fails on any
+difference. (`shims/` is deliberately outside the sync — see the script's header for what must
+happen if the iOS Flags shim ever ships.)
 
 ### Layout
 

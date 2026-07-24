@@ -120,6 +120,7 @@ namespace DatadogRUM
 	}
 
 	// @interface DDDefaultUIKitRUMActionsPredicate
+	/// <summary>The default UIKit action-tracking predicate: taps become RUM actions named after the control.</summary>
 	[BaseType (typeof(NSObject))]
 	interface DDDefaultUIKitRUMActionsPredicate : DDUIKitRUMActionsPredicate
 	{
@@ -128,6 +129,7 @@ namespace DatadogRUM
 	}
 
 	// @interface DDDefaultUIKitRUMViewsPredicate
+	/// <summary>The default UIKit view-tracking predicate: roughly one RUM view per view controller.</summary>
 	[BaseType (typeof(NSObject))]
 	interface DDDefaultUIKitRUMViewsPredicate : DDUIKitRUMViewsPredicate
 	{
@@ -170,6 +172,7 @@ namespace DatadogRUM
 	}
 
 	// @interface DDRUM
+	/// <summary>Enables Real User Monitoring. <c>EnableWith(DDRUMConfiguration)</c> once, after core initialisation. Docs: https://docs.datadoghq.com/real_user_monitoring/</summary>
 	[BaseType (typeof(NSObject))]
 	interface DDRUM
 	{
@@ -744,6 +747,7 @@ namespace DatadogRUM
 	}
 
 	// @interface DDRUMConfiguration
+	/// <summary>RUM options: the application id, sampling, the UIKit view and action tracking predicates, frustrations, vitals and long tasks.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDRUMConfiguration
@@ -2132,6 +2136,7 @@ namespace DatadogRUM
 	}
 
 	// @interface DDRUMMonitor
+	/// <summary>Reports RUM views, actions, resources and errors; <c>Shared()</c> is the instance. The Additions layer adds <c>using</c>-scoped views, <c>Dictionary&lt;string, object?&gt;</c> attributes, exception overloads and <c>GetCurrentSessionIdAsync</c>.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDRUMMonitor

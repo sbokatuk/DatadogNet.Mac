@@ -6,6 +6,7 @@ using ObjCRuntime;
 namespace DatadogLogs
 {
 	// @interface DDLogEvent
+	/// <summary>One log entry, as the event mapper sees it before upload.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDLogEvent
@@ -300,6 +301,15 @@ namespace DatadogLogs
 	}
 
 	// @interface DDLogger
+	/// <summary>Sends logs to Datadog, one method group per level. The Additions layer's <c>Create(...)</c> is the ergonomic factory, and its <c>Log(level, message, exception, attributes)</c> accepts <see langword="null"/> where these raw methods, faithful to upstream, do not.</summary>
+	//
+	// The error/attributes parameters on the per-level methods below carry no [NullAllowed], and
+	// that is deliberate, not an omission: upstream declares them _Nonnull, and the Swift
+	// implementation takes a non-optional [String: Any] (Logs+objc.swift), so a nil smuggled
+	// through a [NullAllowed] binding would trap in the bridging thunk - a native crash instead of
+	// today's managed ArgumentNullException. A caller with no attributes uses the message-only
+	// overload, or the Additions layer's Log(level, message, exception?, attributes?), which
+	// accepts null for both and converts.
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDLogger
@@ -386,6 +396,7 @@ namespace DatadogLogs
 	}
 
 	// @interface DDLoggerConfiguration
+	/// <summary>How one logger reports: service, name, network info, RUM and Trace bundling, remote sampling and threshold, console echo.</summary>
 	[BaseType (typeof(NSObject))]
 	interface DDLoggerConfiguration
 	{
@@ -418,6 +429,7 @@ namespace DatadogLogs
 	}
 
 	// @interface DDLogs
+	/// <summary>Enables log collection. <c>EnableWith</c> once, after core initialisation and before creating loggers; the static attribute methods apply to every logger.</summary>
 	[BaseType (typeof(NSObject))]
 	interface DDLogs
 	{
@@ -447,6 +459,7 @@ namespace DatadogLogs
 	}
 
 	// @interface DDLogsConfiguration
+	/// <summary>Options for <c>DDLogs.EnableWith</c>: a custom endpoint, and <c>SetEventMapper</c> - the on-device hook that can redact a log or return <see langword="null"/> to drop it.</summary>
 	[BaseType (typeof(NSObject))]
 	interface DDLogsConfiguration
 	{

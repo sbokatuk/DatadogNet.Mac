@@ -38,6 +38,7 @@ namespace DatadogCore
 	}
 
 	// @interface DDConfiguration
+	/// <summary>What <c>DDDatadog.InitializeWithConfiguration</c> starts: client token, environment, site, service, and batching/upload behaviour.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDConfiguration
@@ -102,6 +103,8 @@ namespace DatadogCore
 	}
 
 	// @interface DDDatadog
+	/// <summary>The Datadog SDK entry point: initialisation, user and account info, tracking consent, verbosity and data clearing.</summary>
+	/// <remarks>Initialise once, as early as possible, with <c>InitializeWithConfiguration</c>. Docs: https://docs.datadoghq.com/real_user_monitoring/mobile_and_tv_monitoring/setup/ios/</remarks>
 	[BaseType (typeof(NSObject))]
 	interface DDDatadog
 	{
@@ -215,6 +218,7 @@ namespace DatadogCore
 	}
 
 	// @interface DDSite
+	/// <summary>The Datadog site the SDK uploads to, as static factories: <c>Us1()</c>, <c>Us3()</c>, <c>Us5()</c>, <c>Eu1()</c>, <c>Ap1()</c>, <c>Ap2()</c>, <c>Us1_fed()</c>. Match your organisation's region - the wrong site is the most common reason nothing appears in Datadog.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDSite
@@ -253,6 +257,7 @@ namespace DatadogCore
 	}
 
 	// @interface DDTrackingConsent
+	/// <summary>Tracking consent, as static factories: <c>Granted()</c>, <c>NotGranted()</c>, and <c>Pending()</c> - which collects and holds data on the device until consent is decided.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDTrackingConsent
@@ -271,6 +276,7 @@ namespace DatadogCore
 	}
 
 	// @interface DDURLSessionInstrumentation
+	/// <summary>Automatic RUM resources and distributed tracing for <c>NSUrlSession</c>. Prefer the generic <c>Enable&lt;TDelegate&gt;()</c> from the Additions layer over passing a raw class handle.</summary>
 	[BaseType (typeof(NSObject))]
 	interface DDURLSessionInstrumentation
 	{
