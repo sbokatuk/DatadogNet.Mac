@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """Merge target-framework assets from one set of NuGet packages into another.
 
-No single .NET SDK can build net8.0-ios, net9.0-ios and net10.0-ios together: each SDK's iOS
-workload supports only the current target framework and the previous one. The packages are
-therefore built in two passes (see BuildNugets.sh) and merged here into one package per id.
+A copy of DatadogNet.iOS's build/merge-packages.py - keep the two in sync; the logic is
+target-framework-agnostic and this file should never diverge beyond this docstring.
+
+Here it merges the Mac Catalyst passes: no single .NET SDK builds net8.0-maccatalyst,
+net9.0-maccatalyst and net10.0-maccatalyst together - each SDK's maccatalyst workload supports
+only the current target framework and the previous one - so BuildNugets.sh packs twice and this
+merges the results into one package per id.
 
 For every package in PRIMARY, any lib/<tfm>/ tree that exists in the matching ADDITIONAL package
 but not in PRIMARY is copied across, and any <group targetFramework="..."> ADDITIONAL declares and
 PRIMARY does not is lifted across too. Everything else comes from PRIMARY unchanged.
 
-The two are tracked independently on purpose: DatadogNet.Objc.iOS is a dependency-only
-meta-package with no lib/ folders, so deciding what to merge from lib/ alone left it declaring no
-dependencies at all for net10.
-
-The dependency group is copied rather than synthesised as an empty one. Ten of the eleven packages
-here declare dependencies on their siblings, and an empty group would tell NuGet that a net10.0-ios
-consumer needs none of them - so DatadogNet.Objc.iOS would restore on net10 without DatadogCore,
-DatadogRUM or any of the rest, and the app would fail at link time with undefined Swift symbols.
+The lib/ trees and the dependency groups are tracked independently, and the dependency group is
+copied rather than synthesised as an empty one: every package here declares same-version sibling
+dependencies, and an empty group would tell NuGet a net10 consumer needs none of them. (In the
+iOS repository the meta-package DatadogNet.Objc.iOS - dependencies, no lib/ - is what made both
+choices load-bearing; this repository has no meta-package, but the reasoning holds for the
+grafted dependency groups all the same.)
 
 Usage: merge-packages.py PRIMARY_DIR ADDITIONAL_DIR OUTPUT_DIR
 """

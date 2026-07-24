@@ -18,6 +18,18 @@ set -e
 # Copies ApiDefinitions.cs, StructsAndEnums.cs and Additions/ for every module. Run it after
 # bumping DatadogNativeVersion to whatever the iOS repository binds, diff, and commit. Do not
 # edit the copied files here - edit them in DatadogNet.iOS and re-sync.
+#
+# The commit the copies were taken from is recorded in build/ios-bindings-source.txt, and CI's
+# binding-drift job re-runs this sync against exactly that commit and fails on any difference -
+# so "do not edit here" is an enforced invariant, not a convention. A sync taken from an iOS
+# checkout with uncommitted changes records a dirty marker instead, which disarms the guard
+# (loudly) until a clean sync records a real commit.
+#
+# shims/ is deliberately NOT synced. The iOS repository's shims/DatadogFlagsObjc is an unshipped
+# prototype whose build recipe targets iOS; if it ever ships - giving DatadogFlags a real ObjC
+# surface - this script must grow shims/ handling with a Catalyst build target at the same time,
+# or the next sync will copy an ApiDefinitions.cs that references a shim this repository cannot
+# build.
 
 cd "$(dirname "$0")"
 
@@ -56,5 +68,23 @@ for module in $MODULES; do
     echo "synced DatadogNet.$module.Mac"
 done
 
-echo
+# Record where the copies came from, for the CI drift guard.
+REF_FILE="$ROOT/build/ios-bindings-source.txt"
+if git -C "$IOS_REPO" rev-parse HEAD >/dev/null 2>&1; then
+    sha=$(git -C "$IOS_REPO" rev-parse HEAD)
+    if [ -n "$(git -C "$IOS_REPO" status --porcelain -- src/ 2>/dev/null)" ]; then
+        printf '%s dirty\n' "$sha" > "$REF_FILE"
+        echo
+        echo "WARNING: the iOS checkout has uncommitted binding changes; recorded $sha as dirty."
+        echo "         The CI drift guard is disarmed until a sync from a committed tree."
+    else
+        printf '%s\n' "$sha" > "$REF_FILE"
+        echo
+        echo "Recorded DatadogNet.iOS@$sha in build/ios-bindings-source.txt."
+    fi
+else
+    echo
+    echo "WARNING: $IOS_REPO is not a git checkout; build/ios-bindings-source.txt not updated."
+fi
+
 echo "Review with 'git diff' before committing."

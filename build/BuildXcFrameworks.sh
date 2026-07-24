@@ -64,7 +64,11 @@ fi
 DD_REPO="$WORK/dd-sdk-ios"
 OTEL_REPO="$WORK/opentelemetry-swift-packages"
 ARCHIVES="$WORK/archives"
-DSYMS="$WORK/dsyms"
+# Under libs/, not under $WORK: $WORK is a mktemp directory removed on exit, and dSYMs that only
+# ever exist there cannot be attached to a release - which is the one thing they are for. Next to
+# the frameworks they survive the build, ride the same CI cache, and are never packed (the binding
+# projects reference libs/<Framework>.xcframework by name; nothing globs libs/).
+DSYMS="$LIBS/dsyms"
 
 echo "==> building dd-sdk-ios $DATADOG_VERSION + OpenTelemetryApi $OTEL_VERSION for Mac Catalyst"
 echo "    work directory: $WORK"
@@ -78,6 +82,39 @@ if [ ! -d "$DD_REPO" ]; then
 fi
 if [ ! -d "$OTEL_REPO" ]; then
     git clone --depth 1 --branch "$OTEL_VERSION" https://github.com/DataDog/opentelemetry-swift-packages.git "$OTEL_REPO"
+fi
+
+# ---------------------------------------------------------------------------------------------
+# Guard the second pin. DatadogOtelVersion is maintained by hand in Directory.Build.props and
+# must match the OpenTelemetryApi version the checked-out dd-sdk-ios tag pins in its
+# Cartfile.resolved - bumping the native version and forgetting the OTEL line would otherwise
+# silently build the wrong OpenTelemetryApi. Checked here, against the actual checkout, so the
+# mismatch fails the build instead of shipping.
+# ---------------------------------------------------------------------------------------------
+
+CARTFILE="$DD_REPO/Cartfile.resolved"
+if [ "$DATADOG_SKIP_OTEL_CHECK" = "1" ]; then
+    echo "==> skipping the DatadogOtelVersion check (DATADOG_SKIP_OTEL_CHECK=1)"
+else
+    resolved=""
+    if [ -f "$CARTFILE" ]; then
+        resolved=$(grep -i 'opentelemetry' "$CARTFILE" | grep -oE '"[0-9][A-Za-z0-9._-]*"' | tail -1 | tr -d '"')
+    fi
+    if [ -z "$resolved" ]; then
+        echo "error: could not read the OpenTelemetryApi version from $CARTFILE." >&2
+        echo "       dd-sdk-ios $DATADOG_VERSION no longer pins it there. Find where the new tag pins" >&2
+        echo "       it, update DatadogOtelVersion in Directory.Build.props, and update this check." >&2
+        echo "       DATADOG_SKIP_OTEL_CHECK=1 skips it if the pin has genuinely moved." >&2
+        exit 1
+    fi
+    if [ "$resolved" != "$OTEL_VERSION" ]; then
+        echo "error: DatadogOtelVersion is $OTEL_VERSION, but dd-sdk-ios $DATADOG_VERSION pins OpenTelemetryApi $resolved." >&2
+        echo "       Update DatadogOtelVersion in Directory.Build.props to $resolved. Building with a" >&2
+        echo "       mismatched pin links the Datadog frameworks against one OpenTelemetryApi and" >&2
+        echo "       ships another." >&2
+        exit 1
+    fi
+    echo "==> DatadogOtelVersion $OTEL_VERSION matches dd-sdk-ios $DATADOG_VERSION's Cartfile.resolved"
 fi
 
 # ---------------------------------------------------------------------------------------------
@@ -107,20 +144,55 @@ import sys
 path = sys.argv[1]
 text = open(path).read()
 
+# Every patch below is a text replacement against an Xcode-generated file, and a replacement
+# whose pattern has drifted out from under it is a silent no-op that only surfaces later, as a
+# cryptic xcodebuild failure. So each patch asserts it either changed something or found the
+# already-patched state (a reused DATADOG_BUILD_DIR checkout is patched twice without harm), and
+# anything else fails loudly here, naming the patch that missed.
+failures = []
+
+supports_no = text.count("SUPPORTS_MACCATALYST = NO;")
+supports_yes = text.count("SUPPORTS_MACCATALYST = YES;")
 text = text.replace("SUPPORTS_MACCATALYST = NO;", "SUPPORTS_MACCATALYST = YES;")
+if supports_no == 0 and supports_yes == 0:
+    failures.append(
+        "SUPPORTS_MACCATALYST: found neither '= NO;' to patch nor an existing '= YES;'. "
+        "Upstream has moved or reformatted the setting (an .xcconfig, perhaps); without it the "
+        "archive step rejects the Catalyst destination outright.")
 
 # The singular form appears on link-phase entries and cannot carry two values.
+singular = text.count("platformFilter = ios;")
+singular_patched = text.count("platformFilters = (ios, maccatalyst, );")
 text = text.replace("platformFilter = ios;", "platformFilters = (ios, maccatalyst, );")
 
-# List form, both the inline and the one-value-per-line layout. Idempotent, so a reused
-# DATADOG_BUILD_DIR checkout is patched twice without harm.
+# List form, both the inline and the one-value-per-line layout.
+lists_patched = 0
 def add_maccatalyst(match):
+    global lists_patched
     body = match.group(1)
     if "maccatalyst" in body or "ios" not in body:
         return match.group(0)
+    lists_patched += 1
     return match.group(0).replace("ios,", "ios, maccatalyst,", 1)
 
 text = re.sub(r"platformFilters = \(([^)]*)\)", add_maccatalyst, text)
+
+if singular + singular_patched + lists_patched == 0 and "maccatalyst" not in text:
+    failures.append(
+        "platformFilter(s): nothing was patched and no filter mentions maccatalyst. Catalyst "
+        "would silently drop inter-framework dependencies and the archive would die with "
+        "\"unable to resolve module dependency: 'DatadogInternal'\". If upstream has removed "
+        "platform filters entirely this check can go; otherwise the patterns need updating.")
+
+if failures:
+    print("error: the pbxproj patches no longer match upstream's project file:", file=sys.stderr)
+    for failure in failures:
+        print("  * " + failure, file=sys.stderr)
+    print("  Review the patch block in build/BuildXcFrameworks.sh against " + path, file=sys.stderr)
+    sys.exit(1)
+
+print("    patched SUPPORTS_MACCATALYST on %d target(s), %d singular and %d list platform filter(s)"
+      % (supports_no, singular, lists_patched))
 
 open(path, "w").write(text)
 EOF
@@ -234,5 +306,5 @@ echo
 echo "==> built into $LIBS:"
 ls "$LIBS"
 echo
-echo "    dSYMs (for a GitHub release / Datadog symbolication) are in:"
+echo "    dSYMs (attached to the GitHub release, for Datadog crash symbolication) are in:"
 echo "    $DSYMS"

@@ -7,6 +7,7 @@ using UIKit;
 namespace DatadogSessionReplay
 {
 	// @interface DDSessionReplay
+	/// <summary>Enables Session Replay. Requires RUM. <c>EnableWith(DDSessionReplayConfiguration)</c>; recording control is on the instance.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDSessionReplay
@@ -37,6 +38,7 @@ namespace DatadogSessionReplay
 	}
 
 	// @interface DDSessionReplayConfiguration
+	/// <summary>Replay options: the sample rate and the three on-device privacy levels - required arguments, so what is redacted before upload is always an explicit choice.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDSessionReplayConfiguration
@@ -70,6 +72,7 @@ namespace DatadogSessionReplay
 	}
 
 	// @interface DDSessionReplayPrivacyOverrides
+	/// <summary>Per-view overrides of the global privacy levels, reached through a view's <c>GetDdSessionReplayPrivacyOverrides()</c>.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDSessionReplayPrivacyOverrides

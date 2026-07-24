@@ -7,6 +7,7 @@ using WebKit;
 namespace DatadogWebViewTracking
 {
 	// @interface DDWebViewTracking
+	/// <summary>Bridges RUM events and logs out of a <c>WKWebView</c> whose page runs the Datadog Browser SDK, into the surrounding native session.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDWebViewTracking

@@ -45,6 +45,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check README versions
+        run: ./build/CheckReadmeVersions.sh
+
       - name: Select Xcode
         uses: ./.github/actions/select-xcode
 
@@ -102,6 +105,17 @@ jobs:
       - name: Build Catalyst xcframeworks from source
         if: steps.xcframeworks.outputs.cache-hit != 'true'
         run: ./build/BuildXcFrameworks.sh "${{ steps.native.outputs.version }}"
+
+      # The dSYMs are the only symbolication data these binaries will ever have - Datadog does not
+      # publish Catalyst builds, so nobody else holds them. They live in libs/dsyms (cached with
+      # the frameworks, never packed) and the release workflow attaches them to the GitHub release.
+      - name: Upload dSYMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsyms
+          path: libs/dsyms
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Pack all packages
         run: ./build/BuildNugets.sh "${{ inputs.version }}" "${{ steps.native.outputs.version }}"
@@ -164,3 +178,51 @@ jobs:
             --configuration Debug \
             -p:RuntimeIdentifier=maccatalyst-arm64 \
             -p:DatadogPackageVersion="${{ inputs.version }}"
+
+  # The whole model of this repository rests on the binding sources being verbatim copies of
+  # DatadogNet.iOS's - the Catalyst head of the façade compiles against them on that assumption.
+  # This job turns "do not edit the copies here" from prose into a failing check: it checks out
+  # DatadogNet.iOS at the commit build/ios-bindings-source.txt records (written by the sync
+  # script), re-runs the sync, and fails on any difference. A sync recorded from an uncommitted
+  # iOS tree disarms the guard with a warning until a clean sync replaces it.
+  binding-drift:
+    name: binding sources match DatadogNet.iOS
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the recorded iOS source commit
+        id: source
+        run: |
+          file=build/ios-bindings-source.txt
+          if [ ! -f "${file}" ]; then
+            echo "::error::${file} is missing - run build/SyncBindingsFromiOS.sh from a committed DatadogNet.iOS checkout"
+            exit 1
+          fi
+          ref=$(head -1 "${file}" | cut -d' ' -f1)
+          if grep -q 'dirty' "${file}"; then
+            echo "::warning::the last binding sync was taken from an uncommitted DatadogNet.iOS tree, so the drift guard is disarmed. Re-run build/SyncBindingsFromiOS.sh once the iOS changes are committed."
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "armed=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out DatadogNet.iOS at the recorded commit
+        if: steps.source.outputs.armed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: sbokatuk/DatadogNet.iOS
+          ref: ${{ steps.source.outputs.ref }}
+          path: .ios-sync
+
+      - name: Re-run the sync and fail on any difference
+        if: steps.source.outputs.armed == 'true'
+        run: |
+          ./build/SyncBindingsFromiOS.sh "${GITHUB_WORKSPACE}/.ios-sync"
+          if ! git diff --exit-code -- src/; then
+            echo "::error::binding sources differ from DatadogNet.iOS@${{ steps.source.outputs.ref }}. They are verbatim copies by design - make the change in DatadogNet.iOS, re-run build/SyncBindingsFromiOS.sh, and commit both."
+            exit 1
+          fi
+          echo "Binding sources are byte-identical to DatadogNet.iOS@${{ steps.source.outputs.ref }}."

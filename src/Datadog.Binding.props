@@ -77,6 +77,15 @@
       here with the binding definitions themselves.
     -->
     <NoWarn>$(NoWarn);CS1591;CS0108;CS0109</NoWarn>
+
+    <!--
+      Trim and AOT analysis, permanently on - same reasoning as DatadogNet.iOS, whose Additions
+      sources these builds compile verbatim: an unsafe reflection pattern surfaces at build time,
+      and the generated tier analyses clean (measured before this was enabled). IsTrimmable is
+      deliberately NOT set; see the iOS props for why.
+    -->
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
   </PropertyGroup>
 
   <!-- Packaging -->

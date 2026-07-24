@@ -16,7 +16,8 @@ set -e
 # Packages are written to ../artifacts.
 #
 # Each .NET SDK's maccatalyst workload supports only two target frameworks - the .NET 9 band
-# builds net8/net9, the .NET 10 band builds net9/net10 - so this runs two passes and merges them,
+# builds net8/net9, and the .NET 10 band contributes net10 (Datadog.Binding.props points its pass
+# at net10.0-maccatalyst26.0 alone) - so this runs two passes and merges them,
 # exactly as DatadogNet.iOS does. The repository's global.json pins the .NET 9 SDK, so the second
 # pass is invoked from a scratch directory carrying its own global.json, since the SDK is resolved
 # from the working directory.
