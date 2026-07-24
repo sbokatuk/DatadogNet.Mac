@@ -1,8 +1,25 @@
+using DatadogCore;
 using DatadogLogs;
 using DatadogRUM;
 using DatadogTrace;
+using Foundation;
+using ObjCRuntime;
 
 namespace DatadogNetExample;
+
+/// <summary>
+/// The delegate class <see cref="DDURLSessionInstrumentation"/> is enabled for. Empty on purpose:
+/// the SDK instruments the class itself, so a session created with an instance of it reports its
+/// requests with no code in the delegate — this only adds a completion signal for the demo.
+/// </summary>
+[Register(nameof(SampleSessionDelegate))]
+internal sealed class SampleSessionDelegate : NSUrlSessionDataDelegate
+{
+    public TaskCompletionSource<NSError?> Completion { get; } = new();
+
+    public override void DidCompleteWithError(NSUrlSession session, NSUrlSessionTask task, NSError? error) =>
+        Completion.TrySetResult(error);
+}
 
 /// <summary>
 /// Each button drives one part of the Datadog API. The <see cref="ActivityLabel"/> echoes what was
@@ -194,6 +211,40 @@ public partial class MainPage : ContentPage
             Record($"logged exception: {exception.GetType().Name}");
         }
     }
+
+    private static bool urlSessionInstrumented;
+
+    private async void OnInstrumentedRequest(object? sender, EventArgs e)
+    {
+        // Enable must come before the session is created: the SDK instruments the *delegate
+        // class*, and a session built earlier keeps the uninstrumented one. Enabled once — the
+        // convenience Enable<TDelegate> resolves the class handle and registers it with the SDK;
+        // the raw equivalent takes a Class handle and a configuration object.
+        if (!urlSessionInstrumented)
+        {
+            DDURLSessionInstrumentation.Enable<SampleSessionDelegate>();
+            urlSessionInstrumented = true;
+            Record("URLSession instrumentation enabled for SampleSessionDelegate");
+        }
+
+        var sessionDelegate = new SampleSessionDelegate();
+        using var session = NSUrlSession.FromConfiguration(
+            NSUrlSessionConfiguration.DefaultSessionConfiguration, sessionDelegate, null);
+
+        // No Datadog code from here on - that is the point. The request is reported as a RUM
+        // resource (and traced on first-party hosts) because of the class instrumentation above.
+        var task = session.CreateDataTask(NSUrlRequest.FromUrl(NSUrl.FromString("https://example.com/")!));
+        task.Resume();
+
+        var error = await sessionDelegate.Completion.Task;
+
+        Record(error is null
+            ? "instrumented request finished - reported as a RUM resource with no per-call code"
+            : $"instrumented request failed: {error.LocalizedDescription}");
+    }
+
+    private async void OnOpenWebView(object? sender, EventArgs e) =>
+        await Navigation.PushAsync(new WebViewPage());
 
     private void Record(string message)
     {
