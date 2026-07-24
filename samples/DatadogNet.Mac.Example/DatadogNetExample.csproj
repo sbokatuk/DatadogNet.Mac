@@ -58,6 +58,7 @@
 		<PackageReference Include="DatadogNet.RUM.Mac" Version="$(DatadogPackageVersion)" />
 		<PackageReference Include="DatadogNet.Logs.Mac" Version="$(DatadogPackageVersion)" />
 		<PackageReference Include="DatadogNet.Trace.Mac" Version="$(DatadogPackageVersion)" />
+		<PackageReference Include="DatadogNet.WebViewTracking.Mac" Version="$(DatadogPackageVersion)" />
 		<PackageReference Include="DatadogNet.CrashReporting.Mac" Version="$(DatadogPackageVersion)" />
 	</ItemGroup>
 

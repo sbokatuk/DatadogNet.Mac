@@ -53,6 +53,20 @@
 
             <BoxView HeightRequest="1" Color="LightGray" />
 
+            <Label Text="Automatic instrumentation" FontSize="18" FontAttributes="Bold" />
+
+            <Button Text="Make an instrumented URLSession request"
+                    Clicked="OnInstrumentedRequest" />
+
+            <BoxView HeightRequest="1" Color="LightGray" />
+
+            <Label Text="Web view" FontSize="18" FontAttributes="Bold" />
+
+            <Button Text="Open a tracked web view"
+                    Clicked="OnOpenWebView" />
+
+            <BoxView HeightRequest="1" Color="LightGray" />
+
             <Label Text="Activity" FontSize="18" FontAttributes="Bold" />
 
             <Label x:Name="ActivityLabel"
