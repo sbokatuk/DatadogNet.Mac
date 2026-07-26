@@ -109,6 +109,16 @@ jobs:
       # The dSYMs are the only symbolication data these binaries will ever have - Datadog does not
       # publish Catalyst builds, so nobody else holds them. They live in libs/dsyms (cached with
       # the frameworks, never packed) and the release workflow attaches them to the GitHub release.
+      #
+      # BUILD-INFO.txt rides along: it records which Xcode and SDK compiled these exact binaries,
+      # which is the first thing anyone rebuilding-to-compare needs - and the dSYM artifact is the
+      # only build output a human ever downloads, so a record that stays behind in libs/ dies with
+      # the runner. Copied in rather than listed as a second upload path, because a multi-path
+      # upload would re-root the artifact at libs/ and nest the dSYMs a level deeper than the
+      # release zip step expects.
+      - name: Include the build record with the dSYMs
+        run: cp libs/BUILD-INFO.txt libs/dsyms/
+
       - name: Upload dSYMs
         uses: actions/upload-artifact@v4
         with:
