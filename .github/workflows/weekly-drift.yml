@@ -1,0 +1,110 @@
+name: weekly drift
+
+# The drift guards otherwise run only when something *here* changes - pull requests and release
+# tags - but what they guard moves on its own: DatadogNet.iOS keeps advancing after
+# build/ios-bindings-source.txt pins a commit, and nothing in a quiet Mac repository would ever
+# notice. This schedule closes both gaps between releases:
+#
+#   * re-runs the binding/tooling drift guard (the same reusable workflow build.yml calls), so
+#     an upstream force-push, a botched merge here, or a tooling edit that skipped one side
+#     surfaces within a week instead of at the next release;
+#
+#   * checks whether DatadogNet.iOS's src/ has moved past the pinned commit, and opens one issue
+#     (not one per week) listing the changed files when it has - the cue that a re-sync and a
+#     binding-revision release are probably due.
+
+on:
+  schedule:
+    # Mondays, 06:23 UTC. Off the whole hour deliberately: GitHub sheds exactly-on-the-hour cron
+    # load first, and a guard that silently never runs is worse than no guard.
+    - cron: '23 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  binding-drift:
+    name: binding drift
+    uses: ./.github/workflows/binding-drift.yml
+
+  ios-staleness:
+    name: iOS src/ ahead of the pin?
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # No disarming on a dirty pin here, unlike the drift guard: even a sync taken from a dirty
+      # tree names the commit that tree sat on, and "has src/ moved past that commit" is exactly
+      # the staleness question either way. A pin naming a commit GitHub has never seen fails the
+      # checkout below, loudly - which is itself worth knowing.
+      - name: Read the recorded iOS source commit
+        id: source
+        run: |
+          file=build/ios-bindings-source.txt
+          if [ ! -f "${file}" ]; then
+            echo "::error::${file} is missing - run build/SyncBindingsFromiOS.sh from a committed DatadogNet.iOS checkout"
+            exit 1
+          fi
+          echo "ref=$(head -1 "${file}" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out DatadogNet.iOS at the recorded commit
+        uses: actions/checkout@v4
+        with:
+          repository: sbokatuk/DatadogNet.iOS
+          ref: ${{ steps.source.outputs.ref }}
+          path: .ios-sync
+
+      - name: Compare the pin against iOS main and open the issue once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PIN: ${{ steps.source.outputs.ref }}
+        run: |
+          # Shallow on both sides on purpose: the diff needs the two trees, not the history
+          # between them, and the pin may be hundreds of commits behind by the time this fires.
+          git -C .ios-sync fetch --quiet --depth=1 origin main
+          tip=$(git -C .ios-sync rev-parse origin/main)
+
+          # Only src/ matters: that is what SyncBindingsFromiOS.sh copies. iOS README or CI
+          # churn is none of this repository's business.
+          changed=$(git -C .ios-sync diff --name-only "${PIN}" origin/main -- src/)
+          if [ -z "${changed}" ]; then
+            echo "DatadogNet.iOS src/ is unchanged since the pinned ${PIN}."
+            exit 0
+          fi
+
+          echo "DatadogNet.iOS src/ has moved past ${PIN}:"
+          echo "${changed}"
+
+          # One standing issue, not one per week: matched by exact title among open issues, so
+          # closing it after a re-sync re-arms the alert and nothing ever piles up.
+          title='iOS bindings moved past the Mac pin'
+          open=$(gh issue list --repo "${GITHUB_REPOSITORY}" --state open --limit 100 \
+                   --json title --jq "[.[] | select(.title == \"${title}\")] | length")
+          if [ "${open}" -gt 0 ]; then
+            echo "An open issue already tracks this; not filing another."
+            exit 0
+          fi
+
+          {
+            echo "DatadogNet.iOS's \`src/\` has changed since the commit this repository's bindings were last synced from, so the two platforms' binding surfaces may no longer match."
+            echo
+            echo "- pinned (\`build/ios-bindings-source.txt\`): \`${PIN}\`"
+            echo "- \`DatadogNet.iOS\` main at the time of this run: \`${tip}\`"
+            echo
+            echo "Changed under \`src/\`:"
+            echo
+            echo '```'
+            echo "${changed}"
+            echo '```'
+            echo
+            echo "If the changes are binding-relevant, run \`./build/SyncBindingsFromiOS.sh\` against an up-to-date DatadogNet.iOS checkout, review the diff, and ship a binding-revision release. Close this issue once the pin has moved (or the changes are judged irrelevant); the weekly workflow opens it again only while none is open."
+            echo
+            echo "_Opened by [.github/workflows/weekly-drift.yml](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/main/.github/workflows/weekly-drift.yml); it lists the files changed as of the run that filed it and is not updated afterwards._"
+          } > /tmp/issue-body.md
+
+          gh issue create --repo "${GITHUB_REPOSITORY}" --title "${title}" --body-file /tmp/issue-body.md

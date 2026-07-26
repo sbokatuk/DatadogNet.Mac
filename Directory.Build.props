@@ -5,8 +5,8 @@
       Package versions are <dd-sdk-ios version>.<binding revision>, e.g. 3.14.0.1 - the same
       scheme DatadogNet.iOS uses, deliberately, because both repositories bind the same native
       SDK: Mac Catalyst is a variant of the iOS platform, and dd-sdk-ios is the SDK that runs
-      there. A given DatadogNet.<Module>.MacCatalyst version therefore wraps exactly the same
-      native release as the DatadogNet.<Module>.iOS package of the same version.
+      there. A given DatadogNet.<Module>.Mac version therefore wraps exactly the same native
+      release as the DatadogNet.<Module>.iOS package of the same version.
 
       The fourth component belongs to this repository and increments whenever the bindings or
       packaging change while the native version stays put. It is NOT kept in lock-step with the
@@ -18,7 +18,7 @@
       script needs Xcode rather than just curl.
     -->
     <DatadogNativeVersion>3.14.0</DatadogNativeVersion>
-    <DatadogBindingRevision>2</DatadogBindingRevision>
+    <DatadogBindingRevision>3</DatadogBindingRevision>
     <VersionPrefix>$(DatadogNativeVersion).$(DatadogBindingRevision)</VersionPrefix>
 
     <!--
@@ -26,7 +26,9 @@
       Cartfile.resolved. BuildXcFrameworks.sh builds this tag of
       DataDog/opentelemetry-swift-packages for Mac Catalyst, because the binary Datadog publishes
       for it carries iOS, tvOS, watchOS, visionOS and macOS slices - everything except Catalyst.
-      Bump it together with DatadogNativeVersion by reading the new Cartfile.resolved.
+      Bumped together with DatadogNativeVersion by build/BumpNativeVersion.sh, which reads the
+      new tag's Cartfile.resolved; BuildXcFrameworks.sh re-verifies the pair against the actual
+      checkout at build time.
     -->
     <DatadogOtelVersion>2.5.0</DatadogOtelVersion>
 

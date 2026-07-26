@@ -3,7 +3,13 @@
   <PropertyGroup>
     <DatadogFramework>DatadogSessionReplay</DatadogFramework>
     <DatadogPackageName>SessionReplay</DatadogPackageName>
-    <Description>.NET for Mac Catalyst / .NET MAUI bindings for the native Datadog iOS SDK's DatadogSessionReplay framework: records and replays user sessions, with privacy levels that mask text and user input. Built against dd-sdk-ios $(DatadogNativeVersion). Requires RUM to be enabled.</Description>
+    <!--
+      The second sentence is the honest part, aligned with the README and the sample: upstream's
+      recorder is iOS/iPadOS-only, so this package exists for link-compatibility on Catalyst, and
+      the description must not sell recording that never happens there. Descriptions are owned by
+      this repository (not synced from DatadogNet.iOS), so the caveat lives here safely.
+    -->
+    <Description>.NET for Mac Catalyst / .NET MAUI bindings for the native Datadog iOS SDK's DatadogSessionReplay framework: records and replays user sessions, with privacy levels that mask text and user input. Session Replay is iOS/iPadOS-only upstream and records nothing on Mac Catalyst - this package ships so shared code that references it compiles and links unchanged. Built against dd-sdk-ios $(DatadogNativeVersion). Requires RUM to be enabled.</Description>
     <PackageTags>datadog-session-replay;session-replay</PackageTags>
   </PropertyGroup>
 

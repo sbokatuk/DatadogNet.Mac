@@ -46,6 +46,34 @@ jobs:
           echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
           echo "Releasing ${version} (prerelease=${prerelease})" >> "$GITHUB_STEP_SUMMARY"
 
+      # The tag deciding everything is also the tag's trap: a mistyped v3.15.0.1 pushed while the
+      # branch still pins 3.14.0 would build and publish a 3.15.0 release the branch was never
+      # prepared for - unsynced bindings, README and release notes claiming another version.
+      # Releasing a line the branch does not pin IS legitimate (that flexibility is the point of
+      # deriving from the tag), so the mismatch is a hard stop with an explicit, narrow override
+      # rather than a forbidden state: set the repository variable DATADOG_RELEASE_LINE_OVERRIDE
+      # (Settings > Secrets and variables > Actions > Variables) to the exact native version
+      # being released, e.g. 3.15.0, and re-run this workflow. The variable blesses that one
+      # line only - the next typo still fails - and should be removed once the release is done.
+      - name: Check the tag against Directory.Build.props
+        run: |
+          native="${{ steps.resolve.outputs.native-version }}"
+          props=$(sed -n 's:.*<DatadogNativeVersion>\(.*\)</DatadogNativeVersion>.*:\1:p' Directory.Build.props | head -1)
+          if [ -z "${props}" ]; then
+            echo "::error::could not read DatadogNativeVersion from Directory.Build.props"
+            exit 1
+          fi
+          if [ "${native}" = "${props}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} matches DatadogNativeVersion ${props}."
+            exit 0
+          fi
+          if [ "${{ vars.DATADOG_RELEASE_LINE_OVERRIDE }}" = "${native}" ]; then
+            echo "::warning::releasing dd-sdk-ios ${native} from a branch pinned to ${props}, allowed by DATADOG_RELEASE_LINE_OVERRIDE. Remove the variable once this release is done."
+            exit 0
+          fi
+          echo "::error::tag ${GITHUB_REF_NAME} would release dd-sdk-ios ${native}, but Directory.Build.props pins ${props} - this is what a mistyped tag looks like. If the different line is deliberate, set the repository variable DATADOG_RELEASE_LINE_OVERRIDE to ${native} and re-run this workflow."
+          exit 1
+
   build:
     name: build
     needs: version
@@ -63,9 +91,11 @@ jobs:
     permissions:
       # contents: write creates the GitHub release; id-token: write lets the job request the OIDC
       # token that nuget.org exchanges for a short-lived API key. Without the latter the token
-      # request fails silently and the login step gets no key.
+      # request fails silently and the login step gets no key. attestations: write lets the
+      # provenance step store the signed attestation on this repository.
       contents: write
       id-token: write
+      attestations: write
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
@@ -90,6 +120,33 @@ jobs:
         with:
           name: dsyms
           path: dsyms
+
+      # Zipped here, before anything is published, so the attestation below can cover the zip -
+      # the release itself is created last, and attaches this exact file.
+      - name: Package dSYMs for the release
+        run: |
+          # The build workflow puts BUILD-INFO.txt in with the dSYMs, so zipping the directory
+          # wholesale ships the build record too. Asserted rather than assumed: a zip without it
+          # strands the question the file exists to answer - which Xcode built the binaries these
+          # dSYMs symbolicate.
+          if [ ! -f dsyms/BUILD-INFO.txt ]; then
+            echo "::error::the dsyms artifact carries no BUILD-INFO.txt - the build workflow stopped including the build record"
+            exit 1
+          fi
+          (cd dsyms && zip -qry "../dsyms-${VERSION}.zip" .)
+
+      # A signed, publicly verifiable statement binding each artifact to this exact workflow run
+      # - repository, commit, workflow file - checkable with `gh attestation verify`. It is the
+      # machine-checkable half of "built by this repository's CI from this tag"; the README's
+      # "Verifying a build" section is the honest whole, including what an attestation does not
+      # prove. Deliberately before the nuget.org push: if attesting fails, nothing has been
+      # published anywhere yet, and a re-run starts clean.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            artifacts/*.nupkg
+            dsyms-${{ env.VERSION }}.zip
 
       # nuget.org is published to first: a GitHub release that links to packages which failed to
       # upload would be worse than a release created a moment late.
@@ -148,7 +205,8 @@ jobs:
             echo
             echo "\`dsyms-${VERSION}.zip\` below carries the dSYMs for these exact binaries - Datadog publishes"
             echo "no Catalyst builds, so this release is the only place they exist. Upload them to Datadog for"
-            echo "crash symbolication."
+            echo "crash symbolication. The zip also carries \`BUILD-INFO.txt\`: the Xcode, SDK and timestamp the"
+            echo "binaries were built with, for anyone rebuilding at this tag to compare."
             echo
             echo "> The first three components of \`${VERSION}\` are the dd-sdk-ios version; the fourth is this"
             echo "> repository's binding revision, which advances when the bindings or packaging change while"
@@ -187,9 +245,6 @@ jobs:
           } > release-notes.md
 
           cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Package dSYMs for the release
-        run: (cd dsyms && zip -qry "../dsyms-${VERSION}.zip" .)
 
       - name: Create GitHub release
         env:

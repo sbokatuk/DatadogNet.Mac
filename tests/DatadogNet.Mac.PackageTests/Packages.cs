@@ -141,18 +141,18 @@ public static class Packages
     }
 
     /// <summary>
-    /// Whether a slice directory name is the single Mac Catalyst slice the packages are meant to
-    /// ship.
+    /// The single slice directory every package ships, by exact name - the one the README
+    /// promises.
     /// </summary>
     /// <remarks>
-    /// Catalyst slices are named <c>ios-*-maccatalyst</c> - the <c>ios-</c> prefix is what makes
-    /// an iOS-package slice check need the inverse of this test, and what makes asserting on the
-    /// <c>maccatalyst</c> suffix rather than the prefix the meaningful check here. What must
-    /// never appear is a plain iOS, simulator, tvOS, macOS, watchOS or visionOS slice.
+    /// Exact rather than a shape check (<c>ios-*-maccatalyst</c>): BuildXcFrameworks.sh archives
+    /// one Catalyst destination with both Mac architectures, so a differently named slice is not
+    /// a cosmetic variation but a changed build - <c>ios-arm64-maccatalyst</c> would satisfy any
+    /// prefix/suffix test and still break every Intel consumer. The name doubles as the guard
+    /// against a plain iOS, simulator, tvOS, macOS, watchOS or visionOS slice appearing, which
+    /// the looser check existed for.
     /// </remarks>
-    public static bool IsMacCatalystSlice(string slice) =>
-        slice.StartsWith("ios-", StringComparison.Ordinal) &&
-        slice.Contains("maccatalyst", StringComparison.Ordinal);
+    public const string MacCatalystSlice = "ios-arm64_x86_64-maccatalyst";
 }
 
 /// <summary>What one package is expected to be.</summary>

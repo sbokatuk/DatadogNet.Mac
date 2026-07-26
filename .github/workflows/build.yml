@@ -8,8 +8,8 @@ name: build
 # Two structural differences from DatadogNet.iOS's pipeline:
 #
 #   * The xcframeworks are compiled here (BuildXcFrameworks.sh), not downloaded - Datadog
-#     publishes no Mac Catalyst binaries. The ~15 minute build is cached on the native versions
-#     and the build script's own hash.
+#     publishes no Mac Catalyst binaries. The ~15 minute build is cached on the native versions,
+#     the resolved Xcode and the build script's own hash.
 #
 #   * There is no simulator smoke-test job. Catalyst apps run directly on macOS, and launching a
 #     GUI app on a headless runner is flakier than the coverage is worth; building the sample
@@ -50,6 +50,20 @@ jobs:
 
       - name: Select Xcode
         uses: ./.github/actions/select-xcode
+
+      # Asked of the selected Xcode itself, in this workflow rather than inside the select-xcode
+      # action: the action is a hand-synced copy of DatadogNet.iOS's, guarded by the tooling half
+      # of the binding-drift job, so it stays verbatim and this repository's extra need - a cache
+      # key ingredient - lives here. `xcodebuild -version` reflects the xcode-select the action
+      # just performed, and the answer ("26.0.1-17A400") moves whenever the resolved Xcode does,
+      # whatever moved it: an action config change, or the runner image swapping one patch
+      # release for another inside the same pinned line.
+      - name: Resolve the selected Xcode version
+        id: xcode
+        run: |
+          xcode=$(xcodebuild -version | awk 'NR == 1 { version = $2 } NR == 2 { build = $NF } END { printf "%s-%s", version, build }')
+          echo "version=${xcode}" >> "$GITHUB_OUTPUT"
+          echo "Selected Xcode ${xcode}"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
@@ -98,9 +112,12 @@ jobs:
           path: libs
           # The native versions are part of the key: without them a build for a different line
           # would restore the previous line's frameworks and bind the wrong thing. The script hash
-          # is too, so a change to how the frameworks are built invalidates the cache. Unlike a
-          # download, the compiled output also varies with Xcode, which select-xcode pins.
-          key: datadog-catalyst-xcframeworks-${{ steps.native.outputs.version }}-${{ steps.native.outputs.otel }}-${{ hashFiles('build/BuildXcFrameworks.sh') }}
+          # is too, so a change to how the frameworks are built invalidates the cache. And unlike
+          # a download, the compiled output also varies with Xcode - so the *resolved* Xcode
+          # version is in the key as well. select-xcode pinning the SDK line is not enough: the
+          # cache would survive a select-xcode config change, and the runner image bumping the
+          # patch release within the pinned line, both of which change the compiler.
+          key: datadog-catalyst-xcframeworks-${{ steps.native.outputs.version }}-${{ steps.native.outputs.otel }}-xcode-${{ steps.xcode.outputs.version }}-${{ hashFiles('build/BuildXcFrameworks.sh') }}
 
       - name: Build Catalyst xcframeworks from source
         if: steps.xcframeworks.outputs.cache-hit != 'true'
@@ -109,6 +126,16 @@ jobs:
       # The dSYMs are the only symbolication data these binaries will ever have - Datadog does not
       # publish Catalyst builds, so nobody else holds them. They live in libs/dsyms (cached with
       # the frameworks, never packed) and the release workflow attaches them to the GitHub release.
+      #
+      # BUILD-INFO.txt rides along: it records which Xcode and SDK compiled these exact binaries,
+      # which is the first thing anyone rebuilding-to-compare needs - and the dSYM artifact is the
+      # only build output a human ever downloads, so a record that stays behind in libs/ dies with
+      # the runner. Copied in rather than listed as a second upload path, because a multi-path
+      # upload would re-root the artifact at libs/ and nest the dSYMs a level deeper than the
+      # release zip step expects.
+      - name: Include the build record with the dSYMs
+        run: cp libs/BUILD-INFO.txt libs/dsyms/
+
       - name: Upload dSYMs
         uses: actions/upload-artifact@v4
         with:
@@ -143,10 +170,14 @@ jobs:
           retention-days: 7
 
   sample:
-    name: build sample app
+    name: build sample app (${{ matrix.configuration }})
     timeout-minutes: 30
     needs: pack
     runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
     steps:
       - uses: actions/checkout@v4
 
@@ -171,58 +202,23 @@ jobs:
       # that checks the API is still usable the way the README documents - including the
       # convenience layer, which the generated binding knows nothing about.
       #
-      # Debug, and unsigned, because this is a compile-and-link check and nothing here ships.
+      # Both configurations, because they exercise different toolchains: Debug is the everyday
+      # compile-and-link check, and Release is what consumers actually ship - the ILLink/AOT
+      # behaviour Release turns on has broken binding consumers that built fine in Debug. The
+      # Release leg switches codesigning and packaging off: a runner has no signing identity,
+      # nothing here ships, and the check is that Release *links*, not that it notarises.
       - name: Build the sample against the packed packages
         run: |
           dotnet build samples/DatadogNet.Mac.Example/DatadogNetExample.csproj \
-            --configuration Debug \
+            --configuration ${{ matrix.configuration }} \
             -p:RuntimeIdentifier=maccatalyst-arm64 \
+            ${{ matrix.configuration == 'Release' && '-p:EnableCodeSigning=false -p:CreatePackage=false' || '' }} \
             -p:DatadogPackageVersion="${{ inputs.version }}"
 
-  # The whole model of this repository rests on the binding sources being verbatim copies of
-  # DatadogNet.iOS's - the Catalyst head of the façade compiles against them on that assumption.
-  # This job turns "do not edit the copies here" from prose into a failing check: it checks out
-  # DatadogNet.iOS at the commit build/ios-bindings-source.txt records (written by the sync
-  # script), re-runs the sync, and fails on any difference. A sync recorded from an uncommitted
-  # iOS tree disarms the guard with a warning until a clean sync replaces it.
+  # The binding sources and a handful of tooling files are hand-synced copies of
+  # DatadogNet.iOS's; this guard fails when they drift. Factored into its own workflow file
+  # (which documents exactly what it checks and why) so the weekly schedule can also run it
+  # between releases, when nothing here changes but the iOS repository moves.
   binding-drift:
-    name: binding sources match DatadogNet.iOS
-    timeout-minutes: 10
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Read the recorded iOS source commit
-        id: source
-        run: |
-          file=build/ios-bindings-source.txt
-          if [ ! -f "${file}" ]; then
-            echo "::error::${file} is missing - run build/SyncBindingsFromiOS.sh from a committed DatadogNet.iOS checkout"
-            exit 1
-          fi
-          ref=$(head -1 "${file}" | cut -d' ' -f1)
-          if grep -q 'dirty' "${file}"; then
-            echo "::warning::the last binding sync was taken from an uncommitted DatadogNet.iOS tree, so the drift guard is disarmed. Re-run build/SyncBindingsFromiOS.sh once the iOS changes are committed."
-            echo "armed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "armed=true" >> "$GITHUB_OUTPUT"
-          fi
-          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
-
-      - name: Check out DatadogNet.iOS at the recorded commit
-        if: steps.source.outputs.armed == 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: sbokatuk/DatadogNet.iOS
-          ref: ${{ steps.source.outputs.ref }}
-          path: .ios-sync
-
-      - name: Re-run the sync and fail on any difference
-        if: steps.source.outputs.armed == 'true'
-        run: |
-          ./build/SyncBindingsFromiOS.sh "${GITHUB_WORKSPACE}/.ios-sync"
-          if ! git diff --exit-code -- src/; then
-            echo "::error::binding sources differ from DatadogNet.iOS@${{ steps.source.outputs.ref }}. They are verbatim copies by design - make the change in DatadogNet.iOS, re-run build/SyncBindingsFromiOS.sh, and commit both."
-            exit 1
-          fi
-          echo "Binding sources are byte-identical to DatadogNet.iOS@${{ steps.source.outputs.ref }}."
+    name: binding drift
+    uses: ./.github/workflows/binding-drift.yml
