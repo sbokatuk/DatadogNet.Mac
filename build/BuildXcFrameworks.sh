@@ -198,6 +198,105 @@ open(path, "w").write(text)
 EOF
 
 # ---------------------------------------------------------------------------------------------
+# Post-build guards. The patches above assert they *applied*; these assert they *worked*. A
+# stale patch does not always kill the archive - a target that silently loses a dependency or a
+# build setting can still produce a binary, just a gutted one: fewer classes, no Objective-C
+# surface, nothing for the bindings to bind. That failure would otherwise surface as a
+# MissingMethodException in a consuming app, so each xcframework is checked the moment it is
+# created: `nm -gU` on both architecture slices must show a canonical exported symbol.
+#
+# The table pins one or two load-bearing exports per framework - the Objective-C class behind
+# the package's main entry point wherever the framework exports Objective-C at all.
+# DatadogFlags and DatadogProfiling export no ObjC classes (no Objective-C API upstream yet),
+# and OpenTelemetryApi is pure Swift; for those the anchor is the Swift nominal type descriptor
+# of the module's entry type instead (mangled names verified with `xcrun swift-demangle`):
+#
+#   _$s12DatadogFlags0B0OMn        nominal type descriptor for DatadogFlags.Flags
+#   _$s16DatadogProfiling0B0OMn    nominal type descriptor for DatadogProfiling.Profiling
+#   _$s16OpenTelemetryApi0aB0VMn   nominal type descriptor for OpenTelemetryApi.OpenTelemetry
+# ---------------------------------------------------------------------------------------------
+
+typeset -A CANONICAL_EXPORTS
+CANONICAL_EXPORTS=(
+    DatadogInternal         '_OBJC_CLASS_$_DDInternalLogger'
+    DatadogCore             '_OBJC_CLASS_$_DDDatadog _OBJC_CLASS_$_DDConfiguration'
+    DatadogLogs             '_OBJC_CLASS_$_DDLogs _OBJC_CLASS_$_DDLogger'
+    DatadogTrace            '_OBJC_CLASS_$_DDTrace _OBJC_CLASS_$_DDTracer'
+    DatadogRUM              '_OBJC_CLASS_$_DDRUM _OBJC_CLASS_$_DDRUMMonitor'
+    DatadogCrashReporting   '_OBJC_CLASS_$_DDCrashReporter'
+    DatadogWebViewTracking  '_OBJC_CLASS_$_DDWebViewTracking'
+    DatadogSessionReplay    '_OBJC_CLASS_$_DDSessionReplay _OBJC_CLASS_$_DDSessionReplayConfiguration'
+    DatadogFlags            '_$s12DatadogFlags0B0OMn'
+    DatadogProfiling        '_$s16DatadogProfiling0B0OMn'
+    OpenTelemetryApi        '_$s16OpenTelemetryApi0aB0VMn'
+)
+
+assert_canonical_exports() {
+    local framework="$1"
+    local symbols="${CANONICAL_EXPORTS[$framework]:-}"
+
+    if [ -z "$symbols" ]; then
+        echo "error: no canonical exports are recorded for $framework." >&2
+        echo "       A new framework needs an entry in CANONICAL_EXPORTS: pick a stable exported" >&2
+        echo "       symbol with 'nm -gU' on the built binary, so a gutted build of it fails here" >&2
+        echo "       like the others do." >&2
+        exit 1
+    fi
+
+    # The path both asserts and documents the one slice this build produces - the exact
+    # directory name the README and the package tests promise. $framework.framework/$framework
+    # is the bundle-root symlink into Versions/, which nm follows.
+    local slice="$LIBS/$framework.xcframework/ios-arm64_x86_64-maccatalyst"
+    local binary="$slice/$framework.framework/$framework"
+    if [ ! -f "$binary" ]; then
+        echo "error: $framework.xcframework has no ios-arm64_x86_64-maccatalyst slice ($binary)." >&2
+        echo "       That name is a shipped promise - the bindings and the package tests expect" >&2
+        echo "       exactly it - so if -create-xcframework started naming the slice differently," >&2
+        echo "       the change has to be deliberate, here and there together." >&2
+        exit 1
+    fi
+
+    # Both slices checked separately: a universal binary with one healthy and one gutted
+    # architecture would pass a single fat-file scan. The export list is captured once per arch
+    # and grepped from a herestring - `nm | grep -q` would let grep exit before nm finishes
+    # writing, and under this script's pipefail that SIGPIPE turns a *found* symbol into a
+    # failure on the larger binaries.
+    local arch symbol exports
+    for arch in arm64 x86_64; do
+        exports=$(nm -gU -arch "$arch" "$binary" | awk '{print $3}')
+        for symbol in ${=symbols}; do
+            if ! grep -qxF "$symbol" <<< "$exports"; then
+                echo "error: $framework ($arch) no longer exports $symbol." >&2
+                echo "       The archive succeeded but produced a gutted module - the usual cause" >&2
+                echo "       is a pbxproj patch above matching on text but no longer doing what it" >&2
+                echo "       did (a dropped dependency or build setting still archives). If" >&2
+                echo "       upstream genuinely renamed or removed the symbol, update" >&2
+                echo "       CANONICAL_EXPORTS - after checking the bindings survive the change." >&2
+                exit 1
+            fi
+        done
+    done
+    echo "    canonical exports present in both slices: $symbols"
+}
+
+# Strict on purpose, where this used to be a silent `2>/dev/null || true`: these dSYMs are the
+# only symbolication data the binaries will ever have - Datadog publishes no Catalyst builds, so
+# no one else holds them - and a build that quietly drops one produces a release whose crashes
+# can never be symbolicated. An archive without a dSYM means the archive settings changed
+# (DEBUG_INFORMATION_FORMAT, most likely); that is a build failure, not a shrug.
+copy_dsym() {
+    local dsym="$1"
+    if [ ! -d "$dsym" ]; then
+        echo "error: the archive produced no dSYM at $dsym." >&2
+        echo "       The release attaches these for crash symbolication and they exist nowhere" >&2
+        echo "       else. Fix whatever stopped the archive emitting dSYMs rather than shipping" >&2
+        echo "       binaries that can never be symbolicated." >&2
+        exit 1
+    fi
+    cp -R "$dsym" "$DSYMS/"
+}
+
+# ---------------------------------------------------------------------------------------------
 # OpenTelemetryApi for Mac Catalyst, following upstream's scripts/build.sh for that repository:
 # archive the SwiftPM library scheme (the product lands in usr/local/lib), then graft the
 # swiftmodule in by hand, because BUILD_LIBRARY_FOR_DISTRIBUTION only puts it in the build tree.
@@ -238,7 +337,8 @@ echo "==> creating OpenTelemetryApi.xcframework"
 xcodebuild -create-xcframework \
     -framework "$OTEL_FRAMEWORK" \
     -output "$LIBS/OpenTelemetryApi.xcframework"
-cp -R "$ARCHIVES/OpenTelemetryApi/catalyst.xcarchive/dSYMs/OpenTelemetryApi.framework.dSYM" "$DSYMS/" 2>/dev/null || true
+assert_canonical_exports OpenTelemetryApi
+copy_dsym "$ARCHIVES/OpenTelemetryApi/catalyst.xcarchive/dSYMs/OpenTelemetryApi.framework.dSYM"
 
 # The Datadog project links OpenTelemetryApi as the Carthage binary at this exact path; give it
 # one that actually has a Catalyst slice.
@@ -286,8 +386,27 @@ for scheme in ${=SCHEMES}; do
     xcodebuild -create-xcframework \
         -framework "$fwk" \
         -output "$LIBS/$scheme.xcframework"
-    cp -R "$archive.xcarchive/dSYMs/$scheme.framework.dSYM" "$DSYMS/" 2>/dev/null || true
+    assert_canonical_exports "$scheme"
+    copy_dsym "$archive.xcarchive/dSYMs/$scheme.framework.dSYM"
 done
+
+# ---------------------------------------------------------------------------------------------
+# One dSYM per framework, counted before anything gets recorded as done. copy_dsym already fails
+# on a missing bundle, so this is the structural complement: it catches the copies and the
+# scheme list drifting apart - a framework added to SCHEMES whose dSYM path changed shape, or a
+# stray extra bundle from an earlier layout - rather than any single copy going missing.
+# ---------------------------------------------------------------------------------------------
+
+expected_dsyms=$(( $(echo "$SCHEMES" | wc -w) + 1 ))   # every scheme, plus OpenTelemetryApi
+actual_dsyms=$(ls -d "$DSYMS"/*.dSYM 2>/dev/null | wc -l | tr -d ' ')
+if [ "$actual_dsyms" -ne "$expected_dsyms" ]; then
+    echo "error: expected $expected_dsyms dSYMs in $DSYMS, found $actual_dsyms:" >&2
+    ls "$DSYMS" >&2
+    echo "       The release attaches exactly one dSYM per shipped framework; a mismatch means" >&2
+    echo "       the scheme list and the dSYM export in this script have drifted apart." >&2
+    exit 1
+fi
+echo "==> all $actual_dsyms dSYMs exported to $DSYMS"
 
 # ---------------------------------------------------------------------------------------------
 # Record what was built with what. The binding packages' version already pins the Datadog
