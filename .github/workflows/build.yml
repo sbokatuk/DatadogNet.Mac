@@ -170,10 +170,14 @@ jobs:
           retention-days: 7
 
   sample:
-    name: build sample app
+    name: build sample app (${{ matrix.configuration }})
     timeout-minutes: 30
     needs: pack
     runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
     steps:
       - uses: actions/checkout@v4
 
@@ -198,12 +202,17 @@ jobs:
       # that checks the API is still usable the way the README documents - including the
       # convenience layer, which the generated binding knows nothing about.
       #
-      # Debug, and unsigned, because this is a compile-and-link check and nothing here ships.
+      # Both configurations, because they exercise different toolchains: Debug is the everyday
+      # compile-and-link check, and Release is what consumers actually ship - the ILLink/AOT
+      # behaviour Release turns on has broken binding consumers that built fine in Debug. The
+      # Release leg switches codesigning and packaging off: a runner has no signing identity,
+      # nothing here ships, and the check is that Release *links*, not that it notarises.
       - name: Build the sample against the packed packages
         run: |
           dotnet build samples/DatadogNet.Mac.Example/DatadogNetExample.csproj \
-            --configuration Debug \
+            --configuration ${{ matrix.configuration }} \
             -p:RuntimeIdentifier=maccatalyst-arm64 \
+            ${{ matrix.configuration == 'Release' && '-p:EnableCodeSigning=false -p:CreatePackage=false' || '' }} \
             -p:DatadogPackageVersion="${{ inputs.version }}"
 
   # The binding sources and a handful of tooling files are hand-synced copies of
