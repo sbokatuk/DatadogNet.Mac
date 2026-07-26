@@ -120,14 +120,13 @@ public class PackageLayoutTests
 
         var slices = SlicesOf(payload, spec.Framework);
 
-        // Exactly one slice, and it is the Catalyst one. These frameworks are built by
-        // BuildXcFrameworks.sh with a single Catalyst destination, so a second slice appearing -
-        // or an ios-arm64 device slice replacing the maccatalyst one - means the build script
-        // changed what it archives, and a net*-maccatalyst consumer would fail to link.
+        // Exactly one slice, and it is the Catalyst one by exact name. These frameworks are
+        // built by BuildXcFrameworks.sh with a single Catalyst destination and both Mac
+        // architectures, so anything else here - a second slice, a device slice, a single-arch
+        // slice name - means the build script changed what it archives, and some
+        // net*-maccatalyst consumer would fail to link.
         var slice = Assert.Single(slices);
-        Assert.True(
-            Packages.IsMacCatalystSlice(slice),
-            $"{spec.Framework}.xcframework carries '{slice}' instead of a maccatalyst slice.");
+        Assert.Equal(Packages.MacCatalystSlice, slice);
     }
 
     [Theory]
