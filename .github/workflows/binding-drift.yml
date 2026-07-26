@@ -1,0 +1,118 @@
+name: binding drift
+
+# The whole model of this repository rests on the binding sources being verbatim copies of
+# DatadogNet.iOS's - the Catalyst head of the façade compiles against them on that assumption.
+# This workflow turns "do not edit the copies here" from prose into a failing check: it checks
+# out DatadogNet.iOS at the commit build/ios-bindings-source.txt records (written by the sync
+# script), re-runs the sync, and fails on any difference. A sync recorded from an uncommitted
+# iOS tree disarms the guard with a warning until a clean sync replaces it.
+#
+# The bindings are not the only hand-synced copies, so the same job also compares the tooling
+# files that are carried from DatadogNet.iOS by hand - each one marked "keep in sync" in its own
+# comments.
+#
+# A separate workflow file rather than a job inside build.yml, so that the weekly schedule can
+# run the guard between releases without dragging the 15-minute native build along; build.yml
+# still calls it on every pull request and release.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  binding-drift:
+    name: binding sources match DatadogNet.iOS
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the recorded iOS source commit
+        id: source
+        run: |
+          file=build/ios-bindings-source.txt
+          if [ ! -f "${file}" ]; then
+            echo "::error::${file} is missing - run build/SyncBindingsFromiOS.sh from a committed DatadogNet.iOS checkout"
+            exit 1
+          fi
+          ref=$(head -1 "${file}" | cut -d' ' -f1)
+          if grep -q 'dirty' "${file}"; then
+            echo "::warning::the last binding sync was taken from an uncommitted DatadogNet.iOS tree, so the drift guard is disarmed. Re-run build/SyncBindingsFromiOS.sh once the iOS changes are committed."
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "armed=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out DatadogNet.iOS at the recorded commit
+        if: steps.source.outputs.armed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: sbokatuk/DatadogNet.iOS
+          ref: ${{ steps.source.outputs.ref }}
+          path: .ios-sync
+
+      - name: Re-run the sync and fail on any difference
+        if: steps.source.outputs.armed == 'true'
+        run: |
+          ./build/SyncBindingsFromiOS.sh "${GITHUB_WORKSPACE}/.ios-sync"
+          if ! git diff --exit-code -- src/; then
+            echo "::error::binding sources differ from DatadogNet.iOS@${{ steps.source.outputs.ref }}. They are verbatim copies by design - make the change in DatadogNet.iOS, re-run build/SyncBindingsFromiOS.sh, and commit both."
+            exit 1
+          fi
+          echo "Binding sources are byte-identical to DatadogNet.iOS@${{ steps.source.outputs.ref }}."
+
+      # The bindings arrive by script; these three arrive by hand, and hand-synced copies drift.
+      # Unlike the bindings they are NOT verbatim: each copy's comments say what is true in its
+      # own repository, and that divergence is deliberate. So the comparison strips whole-line
+      # #-comments and blank lines first - and for merge-packages.py the module docstring too,
+      # since that file's header names the docstring as the one place it may differ. What
+      # survives the strip is code, and a code difference means the copies have functionally
+      # drifted: fix it in DatadogNet.iOS and carry it here, or vice versa, but do not let the
+      # two quietly solve the same problem differently.
+      #
+      # Whole-line comments only, on purpose: a '#' can legitimately appear inside code, and
+      # stripping trailing fragments risks eating real differences. Both sides pass through the
+      # same strip, so anything cosmetic disappears symmetrically.
+      - name: Compare the hand-synced tooling against the same commit
+        if: steps.source.outputs.armed == 'true'
+        run: |
+          strip() {
+            case "$1" in
+              *.py)
+                # Drop everything through the docstring's closing '"""' (the shebang goes with
+                # it - a #-line anyway), then comments and blanks.
+                awk 'f { print } /^"""$/ { f = 1 }' "$1" | grep -vE '^[[:space:]]*#' | grep -vE '^[[:space:]]*$'
+                ;;
+              *)
+                grep -vE '^[[:space:]]*#' "$1" | grep -vE '^[[:space:]]*$'
+                ;;
+            esac
+          }
+
+          failed=0
+          for file in \
+            build/merge-packages.py \
+            .github/actions/select-xcode/action.yml \
+            build/CheckReadmeVersions.sh
+          do
+            theirs="${GITHUB_WORKSPACE}/.ios-sync/${file}"
+            if [ ! -f "${theirs}" ]; then
+              echo "::error::${file} no longer exists in DatadogNet.iOS@${{ steps.source.outputs.ref }} - the copy here has lost its upstream; decide whether it is now owned here and update this manifest"
+              failed=1
+              continue
+            fi
+            if ! diff -u \
+                --label "DatadogNet.iOS/${file}" --label "DatadogNet.Mac/${file}" \
+                <(strip "${theirs}") <(strip "${file}"); then
+              echo "::error::${file} has functionally drifted from DatadogNet.iOS@${{ steps.source.outputs.ref }} (compared with comments stripped). The two are hand-synced copies - land the change in both repositories."
+              failed=1
+            fi
+          done
+
+          if [ "${failed}" -ne 0 ]; then
+            exit 1
+          fi
+          echo "Hand-synced tooling matches DatadogNet.iOS@${{ steps.source.outputs.ref }} (comments aside)."
