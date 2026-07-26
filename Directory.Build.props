@@ -26,7 +26,9 @@
       Cartfile.resolved. BuildXcFrameworks.sh builds this tag of
       DataDog/opentelemetry-swift-packages for Mac Catalyst, because the binary Datadog publishes
       for it carries iOS, tvOS, watchOS, visionOS and macOS slices - everything except Catalyst.
-      Bump it together with DatadogNativeVersion by reading the new Cartfile.resolved.
+      Bumped together with DatadogNativeVersion by build/BumpNativeVersion.sh, which reads the
+      new tag's Cartfile.resolved; BuildXcFrameworks.sh re-verifies the pair against the actual
+      checkout at build time.
     -->
     <DatadogOtelVersion>2.5.0</DatadogOtelVersion>
 

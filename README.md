@@ -155,13 +155,16 @@ for the sample.
 
 ## Upgrading the Datadog SDK
 
-1. Bump `DatadogNativeVersion` in [Directory.Build.props](Directory.Build.props), reset
-   `DatadogBindingRevision` to 1.
-2. Update `DatadogOtelVersion` to whatever the new tag's `Cartfile.resolved` pins.
-3. Wait for (or produce) the matching DatadogNet.iOS release, then run
+1. `./build/BumpNativeVersion.sh <new dd-sdk-ios version>` - one command for every pin:
+   `DatadogNativeVersion` (revision reset to 1), `DatadogOtelVersion` (read from the new tag's
+   `Cartfile.resolved` on GitHub), the README's package pins, and a scaffolded
+   `docs/release-notes/<version>.md`. It refuses versions whose tag does not exist yet, and
+   prints the rest of this list when it is done.
+2. Wait for (or produce) the matching DatadogNet.iOS release, then run
    `./build/SyncBindingsFromiOS.sh` against it and review the diff.
-4. `./build/BuildXcFrameworks.sh && ./build/BuildNugets.sh && dotnet test tests/DatadogNet.Mac.PackageTests`
-5. Update the README table and `docs/release-notes/`.
+3. `./build/BuildXcFrameworks.sh && ./build/BuildNugets.sh && dotnet test tests/DatadogNet.Mac.PackageTests`
+4. Update the README package table if the feature set moved, and finish the scaffolded release
+   notes - they ship verbatim as every package's `PackageReleaseNotes`.
 
 ## Releasing
 
