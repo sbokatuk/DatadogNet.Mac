@@ -63,9 +63,11 @@ jobs:
     permissions:
       # contents: write creates the GitHub release; id-token: write lets the job request the OIDC
       # token that nuget.org exchanges for a short-lived API key. Without the latter the token
-      # request fails silently and the login step gets no key.
+      # request fails silently and the login step gets no key. attestations: write lets the
+      # provenance step store the signed attestation on this repository.
       contents: write
       id-token: write
+      attestations: write
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
@@ -90,6 +92,33 @@ jobs:
         with:
           name: dsyms
           path: dsyms
+
+      # Zipped here, before anything is published, so the attestation below can cover the zip -
+      # the release itself is created last, and attaches this exact file.
+      - name: Package dSYMs for the release
+        run: |
+          # The build workflow puts BUILD-INFO.txt in with the dSYMs, so zipping the directory
+          # wholesale ships the build record too. Asserted rather than assumed: a zip without it
+          # strands the question the file exists to answer - which Xcode built the binaries these
+          # dSYMs symbolicate.
+          if [ ! -f dsyms/BUILD-INFO.txt ]; then
+            echo "::error::the dsyms artifact carries no BUILD-INFO.txt - the build workflow stopped including the build record"
+            exit 1
+          fi
+          (cd dsyms && zip -qry "../dsyms-${VERSION}.zip" .)
+
+      # A signed, publicly verifiable statement binding each artifact to this exact workflow run
+      # - repository, commit, workflow file - checkable with `gh attestation verify`. It is the
+      # machine-checkable half of "built by this repository's CI from this tag"; the README's
+      # "Verifying a build" section is the honest whole, including what an attestation does not
+      # prove. Deliberately before the nuget.org push: if attesting fails, nothing has been
+      # published anywhere yet, and a re-run starts clean.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            artifacts/*.nupkg
+            dsyms-${{ env.VERSION }}.zip
 
       # nuget.org is published to first: a GitHub release that links to packages which failed to
       # upload would be worse than a release created a moment late.
@@ -188,18 +217,6 @@ jobs:
           } > release-notes.md
 
           cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Package dSYMs for the release
-        run: |
-          # The build workflow puts BUILD-INFO.txt in with the dSYMs, so zipping the directory
-          # wholesale ships the build record too. Asserted rather than assumed: a zip without it
-          # strands the question the file exists to answer - which Xcode built the binaries these
-          # dSYMs symbolicate.
-          if [ ! -f dsyms/BUILD-INFO.txt ]; then
-            echo "::error::the dsyms artifact carries no BUILD-INFO.txt - the build workflow stopped including the build record"
-            exit 1
-          fi
-          (cd dsyms && zip -qry "../dsyms-${VERSION}.zip" .)
 
       - name: Create GitHub release
         env:

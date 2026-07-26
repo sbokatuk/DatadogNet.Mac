@@ -27,6 +27,7 @@ only the package ids differ.
 - [Building locally](#building-locally)
 - [Upgrading the Datadog SDK](#upgrading-the-datadog-sdk)
 - [Releasing](#releasing)
+- [Verifying a build](#verifying-a-build)
 - [Licence](#licence)
 
 ## Packages
@@ -168,6 +169,41 @@ Push a tag `v<version>`, e.g. `v3.14.0.1`. The [release workflow](.github/workfl
 builds the xcframeworks, packs, validates, publishes to nuget.org via trusted publishing, and
 creates a GitHub release; a curated `docs/release-notes/<version>.md` replaces the generated
 commit list when present. Pull requests publish `-beta.<pr>.<run>` prereleases the same way.
+
+## Verifying a build
+
+"Built from source in CI" is a claim worth being able to check, so every release attests what it
+publishes: the `.nupkg` files and the `dsyms-<version>.zip` carry
+[build provenance attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations)
+— a signed, public statement that these exact bytes came out of this repository's release
+workflow, at a named tag and commit, on GitHub's runners. Verify the file you actually
+downloaded with the `gh` CLI:
+
+```sh
+gh attestation verify DatadogNet.Core.Mac.<version>.nupkg --repo sbokatuk/DatadogNet.Mac
+```
+
+That proves *where the bytes were built* — not on someone's laptop, not swapped after the run —
+and names the commit they were built from. It does not prove the source does what it says; for
+that, the repository is small enough to read.
+
+The stronger check is rebuilding it yourself. Byte-identity is not achievable — as
+[build/BuildXcFrameworks.sh](build/BuildXcFrameworks.sh)'s header says, the output varies with
+the Xcode that compiled it, and Mach-O embeds fresh UUIDs regardless — but the exported surface
+is stable and comparable:
+
+1. Read `BUILD-INFO.txt` from the release's `dsyms-<version>.zip`: it records the Xcode and SDK
+   the release binaries were compiled with.
+2. Check out the release tag, install that Xcode, run `./build/BuildXcFrameworks.sh`.
+3. Compare exported symbols per framework, your build against the one inside the shipped package
+   (the payload is `lib/<tfm>/<id>.resources.zip` inside the `.nupkg`):
+
+   ```sh
+   nm -gU <Framework>.framework/<Framework> | awk '{print $3}' | sort
+   ```
+
+Identical symbol lists from the pinned source, at the tag, under the recorded Xcode, is the
+strongest reproducibility statement an Xcode toolchain leaves available.
 
 ## Licence
 
