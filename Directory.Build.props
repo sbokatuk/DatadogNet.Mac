@@ -5,8 +5,8 @@
       Package versions are <dd-sdk-ios version>.<binding revision>, e.g. 3.14.0.1 - the same
       scheme DatadogNet.iOS uses, deliberately, because both repositories bind the same native
       SDK: Mac Catalyst is a variant of the iOS platform, and dd-sdk-ios is the SDK that runs
-      there. A given DatadogNet.<Module>.MacCatalyst version therefore wraps exactly the same
-      native release as the DatadogNet.<Module>.iOS package of the same version.
+      there. A given DatadogNet.<Module>.Mac version therefore wraps exactly the same native
+      release as the DatadogNet.<Module>.iOS package of the same version.
 
       The fourth component belongs to this repository and increments whenever the bindings or
       packaging change while the native version stays put. It is NOT kept in lock-step with the
