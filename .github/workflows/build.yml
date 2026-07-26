@@ -51,6 +51,20 @@ jobs:
       - name: Select Xcode
         uses: ./.github/actions/select-xcode
 
+      # Asked of the selected Xcode itself, in this workflow rather than inside the select-xcode
+      # action: the action is a hand-synced copy of DatadogNet.iOS's, guarded by the tooling half
+      # of the binding-drift job, so it stays verbatim and this repository's extra need - a cache
+      # key ingredient - lives here. `xcodebuild -version` reflects the xcode-select the action
+      # just performed, and the answer ("26.0.1-17A400") moves whenever the resolved Xcode does,
+      # whatever moved it: an action config change, or the runner image swapping one patch
+      # release for another inside the same pinned line.
+      - name: Resolve the selected Xcode version
+        id: xcode
+        run: |
+          xcode=$(xcodebuild -version | awk 'NR == 1 { version = $2 } NR == 2 { build = $NF } END { printf "%s-%s", version, build }')
+          echo "version=${xcode}" >> "$GITHUB_OUTPUT"
+          echo "Selected Xcode ${xcode}"
+
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -98,9 +112,12 @@ jobs:
           path: libs
           # The native versions are part of the key: without them a build for a different line
           # would restore the previous line's frameworks and bind the wrong thing. The script hash
-          # is too, so a change to how the frameworks are built invalidates the cache. Unlike a
-          # download, the compiled output also varies with Xcode, which select-xcode pins.
-          key: datadog-catalyst-xcframeworks-${{ steps.native.outputs.version }}-${{ steps.native.outputs.otel }}-${{ hashFiles('build/BuildXcFrameworks.sh') }}
+          # is too, so a change to how the frameworks are built invalidates the cache. And unlike
+          # a download, the compiled output also varies with Xcode - so the *resolved* Xcode
+          # version is in the key as well. select-xcode pinning the SDK line is not enough: the
+          # cache would survive a select-xcode config change, and the runner image bumping the
+          # patch release within the pinned line, both of which change the compiler.
+          key: datadog-catalyst-xcframeworks-${{ steps.native.outputs.version }}-${{ steps.native.outputs.otel }}-xcode-${{ steps.xcode.outputs.version }}-${{ hashFiles('build/BuildXcFrameworks.sh') }}
 
       - name: Build Catalyst xcframeworks from source
         if: steps.xcframeworks.outputs.cache-hit != 'true'
