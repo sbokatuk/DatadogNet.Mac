@@ -46,6 +46,34 @@ jobs:
           echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
           echo "Releasing ${version} (prerelease=${prerelease})" >> "$GITHUB_STEP_SUMMARY"
 
+      # The tag deciding everything is also the tag's trap: a mistyped v3.15.0.1 pushed while the
+      # branch still pins 3.14.0 would build and publish a 3.15.0 release the branch was never
+      # prepared for - unsynced bindings, README and release notes claiming another version.
+      # Releasing a line the branch does not pin IS legitimate (that flexibility is the point of
+      # deriving from the tag), so the mismatch is a hard stop with an explicit, narrow override
+      # rather than a forbidden state: set the repository variable DATADOG_RELEASE_LINE_OVERRIDE
+      # (Settings > Secrets and variables > Actions > Variables) to the exact native version
+      # being released, e.g. 3.15.0, and re-run this workflow. The variable blesses that one
+      # line only - the next typo still fails - and should be removed once the release is done.
+      - name: Check the tag against Directory.Build.props
+        run: |
+          native="${{ steps.resolve.outputs.native-version }}"
+          props=$(sed -n 's:.*<DatadogNativeVersion>\(.*\)</DatadogNativeVersion>.*:\1:p' Directory.Build.props | head -1)
+          if [ -z "${props}" ]; then
+            echo "::error::could not read DatadogNativeVersion from Directory.Build.props"
+            exit 1
+          fi
+          if [ "${native}" = "${props}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} matches DatadogNativeVersion ${props}."
+            exit 0
+          fi
+          if [ "${{ vars.DATADOG_RELEASE_LINE_OVERRIDE }}" = "${native}" ]; then
+            echo "::warning::releasing dd-sdk-ios ${native} from a branch pinned to ${props}, allowed by DATADOG_RELEASE_LINE_OVERRIDE. Remove the variable once this release is done."
+            exit 0
+          fi
+          echo "::error::tag ${GITHUB_REF_NAME} would release dd-sdk-ios ${native}, but Directory.Build.props pins ${props} - this is what a mistyped tag looks like. If the different line is deliberate, set the repository variable DATADOG_RELEASE_LINE_OVERRIDE to ${native} and re-run this workflow."
+          exit 1
+
   build:
     name: build
     needs: version
