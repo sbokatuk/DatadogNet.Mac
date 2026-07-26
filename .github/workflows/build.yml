@@ -8,8 +8,8 @@ name: build
 # Two structural differences from DatadogNet.iOS's pipeline:
 #
 #   * The xcframeworks are compiled here (BuildXcFrameworks.sh), not downloaded - Datadog
-#     publishes no Mac Catalyst binaries. The ~15 minute build is cached on the native versions
-#     and the build script's own hash.
+#     publishes no Mac Catalyst binaries. The ~15 minute build is cached on the native versions,
+#     the resolved Xcode and the build script's own hash.
 #
 #   * There is no simulator smoke-test job. Catalyst apps run directly on macOS, and launching a
 #     GUI app on a headless runner is flakier than the coverage is worth; building the sample

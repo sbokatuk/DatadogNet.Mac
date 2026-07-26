@@ -104,7 +104,7 @@ jobs:
             echo
             echo "If the changes are binding-relevant, run \`./build/SyncBindingsFromiOS.sh\` against an up-to-date DatadogNet.iOS checkout, review the diff, and ship a binding-revision release. Close this issue once the pin has moved (or the changes are judged irrelevant); the weekly workflow opens it again only while none is open."
             echo
-            echo "_Opened by [.github/workflows/weekly-drift.yml](../blob/main/.github/workflows/weekly-drift.yml); it lists the files changed as of the run that filed it and is not updated afterwards._"
+            echo "_Opened by [.github/workflows/weekly-drift.yml](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/main/.github/workflows/weekly-drift.yml); it lists the files changed as of the run that filed it and is not updated afterwards._"
           } > /tmp/issue-body.md
 
           gh issue create --repo "${GITHUB_REPOSITORY}" --title "${title}" --body-file /tmp/issue-body.md
