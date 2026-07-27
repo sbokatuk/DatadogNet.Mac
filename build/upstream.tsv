@@ -1,0 +1,24 @@
+# What the upstream-drift workflow watches, and the single source of truth for it.
+#
+# build/check-upstream.sh reads this; it knows how to query each ecosystem but nothing about which
+# components this repository binds. Adding a native SDK means adding a row here.
+#
+# Columns are single-tab-separated.
+#   group    reporting group - one GitHub issue per group, titled with this text
+#   label    how the component is named inside the issue
+#   kind     cocoapods | maven | github-release | github-tag
+#   pin      the MSBuild property in Directory.Build.props holding the pinned version
+#   locator  kind-specific: pod name, groupId:artifactId[:packaging][@repo], or owner/repo
+#   confirm  download URL template with {version}, or "-" to derive it from the locator
+#
+# This repository builds the Catalyst xcframeworks from source (build/BuildXcFrameworks.sh) rather
+# than downloading Datadog's, because the binary Datadog publishes has no Catalyst slice. The
+# release asset is still the right thing to confirm against: it is cut at the same moment as the
+# tag this repository clones, so its presence is the signal that the release is complete.
+#
+# Otel is a separate row because it moves on its own line and BumpNativeVersion.sh reads it out of
+# the new tag's Cartfile.resolved - a change there is a second decision, not a detail of the first.
+#
+# group	label	kind	pin	locator	confirm
+Datadog	dd-sdk-ios	github-release	DatadogNativeVersion	DataDog/dd-sdk-ios	https://github.com/DataDog/dd-sdk-ios/releases/download/{version}/Datadog.xcframework.zip
+OpenTelemetry	DataDog/opentelemetry-swift-packages	github-release	DatadogOtelVersion	DataDog/opentelemetry-swift-packages	-
