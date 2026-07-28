@@ -1,9 +1,10 @@
 # Fixed: managed-static registrar crash on real Mac Catalyst runs (TrimMode=partial)
 
-Status: root-caused and fixed. Found and fixed 2026-07-28 while checking `DatadogNet.Mac.Example`
-against this actual Mac (Mac Catalyst has no simulator - running it here already is "on a real
-device"), as part of the same round of real-hardware checks that found the separate,
-still-open native-symbol defect documented in `DatadogNet.iOS/docs/known-issue-device-arm64-missing-objc-class-symbols.md`.
+Status: root-caused and fixed; ships in 3.14.0.4. Found and fixed 2026-07-28 while checking
+`DatadogNet.Mac.Example` against this actual Mac (Mac Catalyst has no simulator - running it here
+already is "on a real device"), as part of the same round of real-hardware checks that found the
+separate native-symbol defect in the iOS packages - since fixed in DatadogNet.iOS 3.14.0.5 and
+documented in `DatadogNet/docs/device-arm64-missing-objc-class-symbols.md`.
 
 ## Symptom
 
