@@ -15,9 +15,10 @@ set -eu
 #     back to 1 (first release on a new native line), DatadogOtelVersion to whatever the new
 #     dd-sdk-ios tag pins in its Cartfile.resolved - fetched from the tag on GitHub, the same
 #     file BuildXcFrameworks.sh cross-checks against the actual checkout at build time.
-#   * README.md: every pinned package version the install snippets carry (the same pins
-#     CheckReadmeVersions.sh guards - and that check is run at the end, so this script leaves
-#     the tree passing it).
+#   * README.md: every pinned package version the install snippets carry, the dd-sdk-ios badge
+#     (its label, the shields.io image path and the release link) and the "Built against"
+#     prose (the same spots CheckReadmeVersions.sh guards - and that check is run at the end,
+#     so this script leaves the tree passing it).
 #   * docs/release-notes/<new version>.1.md: scaffolded if absent. Mind the TODOs in it: the
 #     file ships verbatim as PackageReleaseNotes in every package and as the GitHub release
 #     body.
@@ -113,14 +114,19 @@ sed \
     "$PROPS" > "$PROPS.tmp"
 mv "$PROPS.tmp" "$PROPS"
 
-# The same two shapes CheckReadmeVersions.sh greps for: package pins in install snippets, and
-# any device-check invocation. Prose describing the version *scheme* stays put, exactly as that
-# check deliberately ignores it. (@ as the delimiter on the second expression: its pattern needs
-# a literal ERE alternation |, which cannot also be the delimiter.)
-echo "==> README.md: pinned package versions -> $VERSION"
+# The same shapes CheckReadmeVersions.sh greps for: package pins in install snippets, any
+# device-check invocation, the dd-sdk-ios badge (label, image path, release link) and the
+# "Built against" prose. Prose describing the version *scheme* stays put, exactly as that check
+# deliberately ignores it. (@ as the delimiter on the second expression: its pattern needs a
+# literal ERE alternation |, which cannot also be the delimiter.)
+echo "==> README.md: pinned package versions -> $VERSION, dd-sdk-ios -> $NEW"
 sed -E \
     -e "s|(Include=\"DatadogNet[^\"]*\" +Version=\")[0-9][^\"]*(\")|\\1$VERSION\\2|g" \
     -e "s@(run-(simulator|emulator)-tests\.sh +)[0-9][0-9.]*@\\1$VERSION@g" \
+    -e "s|(\[!\[dd-sdk-ios )[0-9][0-9.]*|\\1$NEW|g" \
+    -e "s|(dd--sdk--ios-)[0-9][0-9.]*|\\1$NEW|g" \
+    -e "s|(dd-sdk-ios/releases/tag/)[0-9][0-9.]*|\\1$NEW|g" \
+    -e "s|(Built against \*\*dd-sdk-ios )[0-9][0-9.]*|\\1$NEW|g" \
     "$README" > "$README.tmp"
 mv "$README.tmp" "$README"
 

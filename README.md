@@ -1,8 +1,13 @@
 # DatadogNet.Mac
 
+[![dd-sdk-ios 3.14.0](https://img.shields.io/badge/dd--sdk--ios-3.14.0-632CA6)](https://github.com/DataDog/dd-sdk-ios/releases/tag/3.14.0)
+
 .NET for Mac Catalyst bindings for the native [Datadog iOS SDK](https://github.com/DataDog/dd-sdk-ios)
 (`dd-sdk-ios`) - RUM, Logs, Trace, crash reporting and feature flags for the Mac Catalyst head of a
 .NET MAUI (or plain .NET for Mac Catalyst) app.
+
+Built against **dd-sdk-ios 3.14.0**, compiled from source for Mac Catalyst - Datadog publishes no
+Catalyst slices of its own.
 
 This is the Mac Catalyst sibling of [DatadogNet.iOS](https://github.com/sbokatuk/DatadogNet.iOS)
 and [DatadogNet.Android](https://github.com/sbokatuk/DatadogNet.Android), and slots under the
@@ -157,9 +162,9 @@ for the sample.
 
 1. `./build/BumpNativeVersion.sh <new dd-sdk-ios version>` - one command for every pin:
    `DatadogNativeVersion` (revision reset to 1), `DatadogOtelVersion` (read from the new tag's
-   `Cartfile.resolved` on GitHub), the README's package pins, and a scaffolded
-   `docs/release-notes/<version>.md`. It refuses versions whose tag does not exist yet, and
-   prints the rest of this list when it is done.
+   `Cartfile.resolved` on GitHub), the README's package pins, badge and "Built against" prose,
+   and a scaffolded `docs/release-notes/<version>.md`. It refuses versions whose tag does not
+   exist yet, and prints the rest of this list when it is done.
 2. Wait for (or produce) the matching DatadogNet.iOS release, then run
    `./build/SyncBindingsFromiOS.sh` against it and review the diff.
 3. `./build/BuildXcFrameworks.sh && ./build/BuildNugets.sh && dotnet test tests/DatadogNet.Mac.PackageTests`
