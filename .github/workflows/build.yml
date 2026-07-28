@@ -18,6 +18,16 @@ name: build
 on:
   workflow_call:
     inputs:
+      verify:
+        description: >
+          Whether to run the verification jobs — package validation, the sample builds, the
+          Release link checks and the e2e suites. Pull requests leave it at true, and are the only
+          place any of this runs. Releases pass false: the tagged commit was already verified on
+          its pull request, so a tag packs and publishes and nothing more. The gate is the same
+          input, with the same name and the same meaning, in every repository.
+        required: false
+        default: true
+        type: boolean
       version:
         description: NuGet version to stamp on every package.
         required: true
@@ -148,6 +158,7 @@ jobs:
         run: ./build/BuildNugets.sh "${{ inputs.version }}" "${{ steps.native.outputs.version }}"
 
       - name: Validate packages
+        if: ${{ inputs.verify }}
         run: dotnet test tests/DatadogNet.Mac.PackageTests --logger 'trx;LogFileName=package-tests.trx'
 
       - name: Upload packages
@@ -161,7 +172,7 @@ jobs:
           retention-days: 7
 
       - name: Upload test results
-        if: always()
+        if: ${{ inputs.verify && (always()) }}
         uses: actions/upload-artifact@v4
         with:
           name: package-test-results
@@ -171,6 +182,7 @@ jobs:
 
   sample:
     name: build sample app (${{ matrix.configuration }})
+    if: ${{ inputs.verify }}
     timeout-minutes: 30
     needs: pack
     runs-on: macos-15
@@ -221,4 +233,5 @@ jobs:
   # between releases, when nothing here changes but the iOS repository moves.
   binding-drift:
     name: binding drift
+    if: ${{ inputs.verify }}
     uses: ./.github/workflows/binding-drift.yml
