@@ -18,7 +18,7 @@
       script needs Xcode rather than just curl.
     -->
     <DatadogNativeVersion>3.14.0</DatadogNativeVersion>
-    <DatadogBindingRevision>3</DatadogBindingRevision>
+    <DatadogBindingRevision>4</DatadogBindingRevision>
     <VersionPrefix>$(DatadogNativeVersion).$(DatadogBindingRevision)</VersionPrefix>
 
     <!--
