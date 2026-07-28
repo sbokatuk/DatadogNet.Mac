@@ -144,10 +144,12 @@
 
   <ItemGroup>
     <!--
-      DatadogFlags and DatadogProfiling have a comment-only ApiDefinitions.cs, inherited from
-      DatadogNet.iOS: upstream exposes no Objective-C surface for those modules yet, so the
-      packages exist to ship the native binary and its symbols. The file is still required - a
-      binding project with no ObjcBindingApiDefinition does not build.
+      Every product module binds its own DD* surface here, since dd-sdk-ios 3.0 deleted the
+      DatadogObjc umbrella framework and moved the DD* types into the module each belongs to.
+      Only DatadogFlags, DatadogProfiling and OpenTelemetryApi have a near-empty
+      ApiDefinitions.cs, inherited from DatadogNet.iOS: upstream projects none of their Swift
+      surface into Objective-C, so there is nothing to bind. The file is still required even
+      then, because a binding project with no ObjcBindingApiDefinition does not build.
     -->
     <ObjcBindingApiDefinition Include="ApiDefinitions.cs" />
     <ObjcBindingCoreSource Include="StructsAndEnums.cs" Condition="Exists('$(MSBuildProjectDirectory)/StructsAndEnums.cs')" />
