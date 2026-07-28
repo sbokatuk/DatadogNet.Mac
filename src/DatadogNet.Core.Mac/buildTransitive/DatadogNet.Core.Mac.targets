@@ -1,0 +1,36 @@
+<Project>
+
+  <!--
+    Imported into every project that (transitively) references any DatadogNet.*.Mac package -
+    DatadogNet.Core.Mac is the one dependency all of them share, so this is the one place a fix
+    that has to reach every consumer belongs.
+
+    Works around dotnet/macios#21636 ("The managed static registrar only works when
+    TrimMode=full"). .NET 9+ defaults Mac Catalyst and iOS-device builds to the managed-static
+    registrar, which relies on a lookup type - ObjCRuntime.__Registrar__ - woven into every
+    binding assembly that needs it. That weaving step only runs reliably under TrimMode=full;
+    MAUI apps default to TrimMode=partial, and under partial trimming the weaving silently skips
+    some assemblies. Confirmed here for DatadogNet.Logs.Mac specifically (Core.Mac got its
+    __Registrar__ type, Logs.Mac did not - same package version, same build), which crashes at
+    first use with:
+
+        ObjCRuntime.RuntimeException: Could not find the type 'ObjCRuntime.__Registrar__'
+        in the assembly 'DatadogNet.Logs.Mac'.
+
+    Only on a real device or under Mac Catalyst - the managed-static registrar isn't the default
+    for the simulator, which is exactly why neither this repository's own CI nor DatadogNet's
+    catches it: both only ever build and run the simulator target.
+
+    The classic static registrar doesn't need this per-assembly weaving at all, sidestepping the
+    trimming interaction entirely. Verified: DatadogNetExample builds and runs on a real Mac with
+    this set, where it crashed without it.
+
+    Condition guards against overriding a consumer that has already picked a Registrar - an app
+    that explicitly wants managed-static (and sets TrimMode=full itself, where this bug doesn't
+    reproduce) is left alone.
+  -->
+  <PropertyGroup Condition=" '$(Registrar)' == '' And $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst' ">
+    <Registrar>static</Registrar>
+  </PropertyGroup>
+
+</Project>

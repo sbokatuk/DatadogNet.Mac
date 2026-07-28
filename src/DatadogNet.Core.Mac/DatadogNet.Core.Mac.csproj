@@ -20,4 +20,14 @@
     <ProjectReference Include="../DatadogNet.Internal.Mac/DatadogNet.Internal.Mac.csproj" />
   </ItemGroup>
 
+  <!--
+    Imported into every project that references this package, transitively: works around
+    dotnet/macios#21636 by defaulting Mac Catalyst consumers to the classic static registrar
+    instead of the managed-static one that breaks under TrimMode=partial. See the comment in the
+    file itself for the full story.
+  -->
+  <ItemGroup>
+    <None Include="buildTransitive/DatadogNet.Core.Mac.targets" Pack="true" PackagePath="buildTransitive/" />
+  </ItemGroup>
+
 </Project>
