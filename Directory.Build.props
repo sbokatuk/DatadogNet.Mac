@@ -17,8 +17,8 @@
       at the git tag $(DatadogNativeVersion) by build/BuildXcFrameworks.sh, which is why that
       script needs Xcode rather than just curl.
     -->
-    <DatadogNativeVersion>3.14.0</DatadogNativeVersion>
-    <DatadogBindingRevision>4</DatadogBindingRevision>
+    <DatadogNativeVersion>3.15.0</DatadogNativeVersion>
+    <DatadogBindingRevision>1</DatadogBindingRevision>
     <VersionPrefix>$(DatadogNativeVersion).$(DatadogBindingRevision)</VersionPrefix>
 
     <!--

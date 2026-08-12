@@ -49,8 +49,8 @@ public static class Datadog
         var configuration = new DDConfiguration(clientToken: ClientToken, env: "sample")
         {
             Service = "datadognet-mac-example",
-            // Pick the site your Datadog organisation is on - Us1, Us3, Us5, Eu1, Ap1, Ap2 or
-            // Us1_fed. Sending to the wrong one is the most common reason events never show up.
+            // Pick the site your Datadog organisation is on - Us1, Us3, Us5, Eu1, Ap1, Ap2, Uk1
+            // or Us1_fed. Sending to the wrong one is the most common reason events never show up.
             Site = DDSite.Us1(),
         };
 

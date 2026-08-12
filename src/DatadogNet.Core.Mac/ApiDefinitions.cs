@@ -218,7 +218,7 @@ namespace DatadogCore
 	}
 
 	// @interface DDSite
-	/// <summary>The Datadog site the SDK uploads to, as static factories: <c>Us1()</c>, <c>Us3()</c>, <c>Us5()</c>, <c>Eu1()</c>, <c>Ap1()</c>, <c>Ap2()</c>, <c>Us1_fed()</c>. Match your organisation's region - the wrong site is the most common reason nothing appears in Datadog.</summary>
+	/// <summary>The Datadog site the SDK uploads to, as static factories: <c>Us1()</c>, <c>Us3()</c>, <c>Us5()</c>, <c>Eu1()</c>, <c>Ap1()</c>, <c>Ap2()</c>, <c>Uk1()</c>, <c>Us1_fed()</c>. Match your organisation's region - the wrong site is the most common reason nothing appears in Datadog.</summary>
 	[BaseType (typeof(NSObject))]
 	[DisableDefaultCtor]
 	interface DDSite
@@ -246,6 +246,11 @@ namespace DatadogCore
 		[Static]
 		[Export ("ap2")]
 		DDSite Ap2 ();
+
+		// New in dd-sdk-ios 3.15.0.
+		[Static]
+		[Export ("uk1")]
+		DDSite Uk1 ();
 
 		[Static]
 		[Export ("us1_fed")]

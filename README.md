@@ -1,12 +1,12 @@
 # DatadogNet.Mac
 
-[![dd-sdk-ios 3.14.0](https://img.shields.io/badge/dd--sdk--ios-3.14.0-632CA6)](https://github.com/DataDog/dd-sdk-ios/releases/tag/3.14.0)
+[![dd-sdk-ios 3.15.0](https://img.shields.io/badge/dd--sdk--ios-3.15.0-632CA6)](https://github.com/DataDog/dd-sdk-ios/releases/tag/3.15.0)
 
 .NET for Mac Catalyst bindings for the native [Datadog iOS SDK](https://github.com/DataDog/dd-sdk-ios)
 (`dd-sdk-ios`) - RUM, Logs, Trace, crash reporting and feature flags for the Mac Catalyst head of a
 .NET MAUI (or plain .NET for Mac Catalyst) app.
 
-Built against **dd-sdk-ios 3.14.0**, compiled from source for Mac Catalyst - Datadog publishes no
+Built against **dd-sdk-ios 3.15.0**, compiled from source for Mac Catalyst - Datadog publishes no
 Catalyst slices of its own.
 
 This is the Mac Catalyst sibling of [DatadogNet.iOS](https://github.com/sbokatuk/DatadogNet.iOS)
@@ -80,8 +80,8 @@ bindings:
 
 ```xml
 <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
-  <PackageReference Include="DatadogNet.Core.Mac" Version="3.14.0.4" />
-  <PackageReference Include="DatadogNet.RUM.Mac" Version="3.14.0.4" />
+  <PackageReference Include="DatadogNet.Core.Mac" Version="3.15.0.1" />
+  <PackageReference Include="DatadogNet.RUM.Mac" Version="3.15.0.1" />
 </ItemGroup>
 ```
 
